@@ -61,8 +61,18 @@ Ve a **http://localhost:8000**
 2. Define la **cantidad** de casos esperada.
 3. Opcional: instrucciones extra (ej. "enfócate en negativos y seguridad").
 4. **Generar casos de prueba** → el agente lee la HU de Azure y el LLM local devuelve los casos.
-5. Revisa/edita cada caso (título, prioridad, pasos, precondiciones).
+5. Revisa/edita cada caso (título, descripción, precondiciones, pasos).
 6. **Crear en Azure DevOps** → crea los `Test Case` enlazados a la HU (aparecerán en la pestaña "Tested by" de la HU y en Test Plans).
+
+## Modo demo (sin Azure DevOps)
+
+Si no configuras `AZURE_DEVOPS_*` en el `.env`, el sistema entra en **modo demo**:
+
+- Se usa una Historia de Usuario de ejemplo ("Inicio de sesión de usuario").
+- La generación de casos con el LLM local funciona igual.
+- El botón "Crear en Azure DevOps" **simula** la creación (no inserta nada en Azure) y lo indica en el resultado.
+
+Es ideal para probar la herramienta antes de tener el PAT o para hacer demos.
 
 ## Endpoints
 

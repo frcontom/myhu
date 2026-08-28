@@ -11,6 +11,7 @@ Funcional de punta a punta:
 - [x] Generación de casos con LLM local (Ollama, `qwen2.5:7b-instruct`, `format=json`).
 - [x] Tabla editable de casos (título, prioridad, tipo, precondiciones, pasos).
 - [x] Creación de `Test Case` en Azure DevOps enlazados a la HU (`POST /api/create`).
+- [x] **Modo demo**: funciona sin Azure DevOps (HU de ejemplo + creación simulada), con banner en el front.
 - [x] Manejo de errores con `detail` legible (front usa `alert`).
 - [x] `docker-compose.yml` (backend + ollama), `.env.example`, README, AGENTS.md.
 
