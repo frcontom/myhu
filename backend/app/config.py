@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+PLACEHOLDERS = {"", "tu-organizacion", "Tu-Proyecto", "tu_pat_aqui", "your-organization", "your-project", "your_pat_here"}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -19,8 +21,13 @@ class Settings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        return bool(
-            self.azure_devops_org and self.azure_devops_project and self.azure_devops_pat
+        return all(
+            (value or "").strip() not in PLACEHOLDERS
+            for value in (
+                self.azure_devops_org,
+                self.azure_devops_project,
+                self.azure_devops_pat,
+            )
         )
 
     @property
