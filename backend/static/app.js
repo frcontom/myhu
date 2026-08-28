@@ -315,7 +315,12 @@ async function fetchHu() {
     state.workItem = data;
     state.huMap[data.id] = { title: data.title, criteriaList: data.criteria_list || [] };
     showHu(state.workItem);
-    setChip("chip-ok", "conectado");
+    const card = $("card-hu");
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    card.classList.remove("flash");
+    void card.offsetWidth;
+    card.classList.add("flash");
+    setChip("chip-ok", `HU #${data.id} cargada`);
   } catch (err) {
     setChip("chip-err", "error");
     alert(err.message);
