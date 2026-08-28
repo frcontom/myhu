@@ -313,6 +313,7 @@ async function fetchHu() {
   try {
     const data = await api(`/api/hu/${workItemId}`);
     state.workItem = data;
+    state.huMap[data.id] = { title: data.title, criteriaList: data.criteria_list || [] };
     showHu(state.workItem);
     setChip("chip-ok", "conectado");
   } catch (err) {
