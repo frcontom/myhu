@@ -99,12 +99,15 @@ class AzureDevOpsClient:
         description: str,
         steps_html: str,
         user_story_id: int,
+        priority: int = 2,
     ) -> Dict[str, Any]:
         fields: Dict[str, Any] = {
             "/fields/System.Title": title,
         }
         if description:
             fields["/fields/System.Description"] = description
+        if priority:
+            fields["/fields/Microsoft.VSTS.Common.Priority"] = priority
         if steps_html:
             fields["/fields/Microsoft.VSTS.TCM.Steps"] = steps_html
 

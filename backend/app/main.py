@@ -155,6 +155,7 @@ def create(req: CreateRequest) -> dict:
                 description=tc.description,
                 steps_html=steps_html,
                 user_story_id=req.work_item_id,
+                priority=tc.priority,
             )
             created.append(item)
         except AzureDevOpsError as exc:

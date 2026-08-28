@@ -482,7 +482,7 @@ function normalizeImported(raw) {
     title: flatten(r.title),
     description: flatten(r.description),
     priority: Number(r.priority) || 2,
-    type: flatten(r.type) || "funcional",
+    type: (flatten(r.type).split("|")[0].trim()) || "funcional",
     preconditions: flatten(r.preconditions),
     criterios: Array.isArray(r.criterios)
       ? r.criterios.map((n) => Number(n)).filter((n) => !isNaN(n))
