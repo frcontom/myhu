@@ -1,9 +1,20 @@
 import base64
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List
 
 import httpx
 
 from .config import settings
+
+
+def parse_criteria(text: str) -> List[str]:
+    if not text:
+        return []
+    lines = [
+        re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+        for line in text.splitlines()
+    ]
+    return [line for line in lines if line]
 
 
 class AzureDevOpsError(Exception):
@@ -11,6 +22,12 @@ class AzureDevOpsError(Exception):
 
 
 def sample_work_item(work_item_id: int) -> Dict[str, Any]:
+    acceptance_criteria = (
+        "1. El usuario puede iniciar sesión con credenciales válidas.\n"
+        "2. Se muestra un mensaje de error claro si las credenciales son inválidas.\n"
+        "3. La cuenta se bloquea tras 5 intentos fallidos consecutivos.\n"
+        "4. Hay un enlace para recuperar la contraseña olvidada."
+    )
     return {
         "id": work_item_id,
         "type": "User Story",
@@ -19,12 +36,8 @@ def sample_work_item(work_item_id: int) -> Dict[str, Any]:
             "Como usuario registrado, quiero iniciar sesión con mi correo y contraseña "
             "para acceder a mi cuenta de forma segura."
         ),
-        "acceptance_criteria": (
-            "1. El usuario puede iniciar sesión con credenciales válidas.\n"
-            "2. Se muestra un mensaje de error claro si las credenciales son inválidas.\n"
-            "3. La cuenta se bloquea tras 5 intentos fallidos consecutivos.\n"
-            "4. Hay un enlace para recuperar la contraseña olvidada."
-        ),
+        "acceptance_criteria": acceptance_criteria,
+        "criteria_list": parse_criteria(acceptance_criteria),
         "state": "New",
         "created_by": "Modo DEMO (sin Azure DevOps)",
     }
@@ -65,12 +78,14 @@ class AzureDevOpsClient:
         )
         data = resp.json()
         fields = data.get("fields", {})
+        acceptance_criteria = fields.get("Microsoft.VSTS.Common.AcceptanceCriteria")
         return {
             "id": data.get("id"),
             "type": fields.get("System.WorkItemType"),
             "title": fields.get("System.Title"),
             "description": fields.get("System.Description"),
-            "acceptance_criteria": fields.get("Microsoft.VSTS.Common.AcceptanceCriteria"),
+            "acceptance_criteria": acceptance_criteria,
+            "criteria_list": parse_criteria(acceptance_criteria),
             "state": fields.get("System.State"),
             "created_by": fields.get("System.CreatedBy", {}).get("displayName"),
         }

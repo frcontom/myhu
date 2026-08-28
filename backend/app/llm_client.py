@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
+from .azure_client import parse_criteria
 from .config import settings
 
 AVG_TOKENS_PER_CASE = 400
@@ -23,6 +24,13 @@ def build_prompt(
     quantity: int,
     instructions: str,
 ) -> str:
+    criteria = work_item.get("criteria_list") or []
+    if not criteria:
+        criteria = parse_criteria(work_item.get("acceptance_criteria"))
+    criteria_block = "\n".join(
+        f"{i}. {c}" for i, c in enumerate(criteria, start=1)
+    ) or "(sin criterios de aceptación)"
+
     return f"""
 Eres un QA senior especializado en diseño de casos de prueba.
 
@@ -37,7 +45,7 @@ Tipo: {work_item.get('type')}
 {work_item.get('description') or '(sin descripción)'}
 
 ### Criterios de Aceptación
-{work_item.get('acceptance_criteria') or '(sin criterios de aceptación)'}
+{criteria_block}
 
 ## REQUISITOS EXTRA DEL QA
 {instructions or '(ninguno, usa tu criterio)'}
@@ -54,6 +62,7 @@ Tipo: {work_item.get('type')}
       "priority": 1,
       "type": "funcional|regresion|integracion|usabilidad|rendimiento|seguridad",
       "preconditions": "precondiciones o vacío",
+      "criterios": [1, 3],
       "steps": [
         {{"action": "paso de acción", "expected": "resultado esperado"}}
       ]
@@ -61,7 +70,8 @@ Tipo: {work_item.get('type')}
   ]
 }}
 3. Cada caso debe tener al menos 2 pasos y cada paso debe tener action y expected.
-4. Los casos deben ser variados: feliz, negativos, límites, edge cases.
+4. "criterios" es la lista de índices (empezando en 1) de los Criterios de Aceptación que ese caso cubre; puede ser vacía [].
+5. Los casos deben ser variados: feliz, negativos, límites, edge cases.
 """.strip()
 
 
@@ -214,12 +224,19 @@ def _normalize_case(raw: Any, index: int) -> Dict[str, Any]:
                     "expected": str(step.get("expected") or "").strip(),
                 }
             )
+    criterios: List[int] = []
+    for raw_c in raw.get("criterios") or []:
+        try:
+            criterios.append(int(raw_c))
+        except (TypeError, ValueError):
+            pass
     return {
         "title": str(raw.get("title") or f"TC-{index:03d}"),
         "description": str(raw.get("description") or ""),
         "priority": int(raw.get("priority") or 2),
         "type": str(raw.get("type") or "funcional"),
         "preconditions": str(raw.get("preconditions") or ""),
+        "criterios": criterios,
         "steps": normalized_steps,
     }
 

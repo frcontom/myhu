@@ -21,8 +21,8 @@
     <section class="card" id="card-form">
       <div class="grid-form">
         <label>
-          ID de la Historia de Usuario
-          <input type="number" id="work-item-id" min="1" placeholder="ej. 12345" required />
+          ID de la Historia de Usuario (puedes poner varios: 123, 456, 789)
+          <input type="text" id="work-item-id" placeholder="ej. 12345 o 123, 456" required />
         </label>
         <label>
           Cantidad de casos
@@ -41,6 +41,14 @@
           <textarea id="instructions" rows="2"
             placeholder="ej. enfócate en casos negativos y de límite, prioriza críticos, incluye pruebas de seguridad…"></textarea>
         </label>
+        <div class="presets full">
+          <span class="presets-label">Presets:</span>
+          <button type="button" class="btn btn-ghost preset-btn" data-preset="smoke">Smoke</button>
+          <button type="button" class="btn btn-ghost preset-btn" data-preset="regresion">Regresión</button>
+          <button type="button" class="btn btn-ghost preset-btn" data-preset="seguridad">Seguridad</button>
+          <button type="button" class="btn btn-ghost preset-btn" data-preset="usabilidad">Usabilidad</button>
+          <button type="button" class="btn btn-ghost preset-btn" data-preset="clear">Limpiar</button>
+        </div>
       </div>
       <div class="actions">
         <button id="btn-generate" class="btn btn-primary">Generar casos de prueba</button>
@@ -59,6 +67,7 @@
         <h2>Casos generados</h2>
         <span id="summary" class="summary-text"></span>
       </div>
+      <div id="coverage" class="coverage"></div>
       <div id="cases-container"></div>
       <div class="actions">
         <button id="btn-add-case" class="btn btn-secondary">+ Agregar Test Case manual</button>

@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let state = {
   workItem: null,
   testCases: [],
+  huMap: {},
 };
 
 async function api(path, options = {}) {
@@ -44,6 +45,40 @@ function showHu(workItem) {
     `Criterios de aceptación:\n${workItem.acceptance_criteria || "(sin criterios)"}`;
 }
 
+function renderCoverage() {
+  const box = $("coverage");
+  box.innerHTML = "";
+  const hurs = Object.entries(state.huMap);
+  if (!hurs.length) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+
+  hurs.forEach(([huId, hu]) => {
+    const cases = state.testCases.filter((c) => c.work_item_id === Number(huId));
+    const block = document.createElement("div");
+    block.className = "coverage-hu";
+    const head = document.createElement("h3");
+    head.textContent = `Cobertura HU #${huId} — ${hu.title}`;
+    block.appendChild(head);
+
+    (hu.criteriaList || []).forEach((crit, idx) => {
+      const n = idx + 1;
+      const covering = cases.filter((c) => (c.criterios || []).includes(n)).length;
+      const row = document.createElement("div");
+      row.className = covering > 0 ? "cov-covered" : "cov-missing";
+      row.textContent = `${covering > 0 ? "✔" : "✖"} ${n}. ${crit}  —  ${covering} caso${covering === 1 ? "" : "s"}`;
+      block.appendChild(row);
+    });
+
+    if (!hu.criteriaList || !hu.criteriaList.length) {
+      const row = document.createElement("div");
+      row.className = "cov-muted";
+      row.textContent = "(esta HU no tiene criterios de aceptación definidos)";
+      block.appendChild(row);
+    }
+    box.appendChild(block);
+  });
+}
+
 function renderCases(cases) {
   const container = $("cases-container");
   container.innerHTML = "";
@@ -61,6 +96,16 @@ function renderCase(tc, idx) {
   const label = document.createElement("span");
   label.className = "case-label";
   label.textContent = `Test Case ${idx + 1}`;
+
+  const huBadge = tc.work_item_id
+    ? (() => {
+        const b = document.createElement("span");
+        b.className = "hu-badge";
+        b.textContent = `HU #${tc.work_item_id}`;
+        b.title = "Historia de Usuario de origen";
+        return b;
+      })()
+    : null;
 
   const title = document.createElement("input");
   title.className = "case-title";
@@ -100,6 +145,7 @@ function renderCase(tc, idx) {
   });
 
   head.append(label, title, priority, type, delCase);
+  if (huBadge) head.appendChild(huBadge);
   div.appendChild(head);
 
   const desc = document.createElement("textarea");
@@ -115,6 +161,16 @@ function renderCase(tc, idx) {
   pre.value = tc.preconditions;
   pre.addEventListener("input", () => { tc.preconditions = pre.value; });
   div.appendChild(pre);
+
+  const crit = document.createElement("input");
+  crit.className = "case-crit";
+  crit.placeholder = "Criterios de aceptación que cubre (ej. 1,3)";
+  crit.value = (tc.criterios || []).join(", ");
+  crit.addEventListener("input", () => {
+    tc.criterios = crit.value.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+    renderCoverage();
+  });
+  div.appendChild(crit);
 
   tc.steps.forEach((step, i) => div.appendChild(renderStep(tc, step, i)));
 
@@ -159,55 +215,83 @@ function renderStep(tc, step, i) {
 }
 
 async function generate() {
-  const workItemId = $("work-item-id").value.trim();
-  if (!workItemId) { alert("Ingresa el ID de la HU"); return; }
-
+  const raw = $("work-item-id").value.trim();
+  if (!raw) { alert("Ingresa al menos un ID de HU"); return; }
+  const ids = [...new Set(raw.split(/[\s,;]+/).filter(Boolean))].slice(0, 20);
   const quantity = Number($("quantity").value) || 5;
   const instructions = $("instructions").value.trim();
-  const url = `/api/generate-stream?work_item_id=${workItemId}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
 
-  setLoading(true, "Generando con el modelo local… puede tardar unos minutos");
-  setProgress(2, "Conectando con Ollama…");
+  state = { workItem: null, testCases: [], huMap: {} };
+  $("card-hu").classList.add("hidden");
+  $("card-results").classList.add("hidden");
+  $("create-result").textContent = "";
 
-  const es = new EventSource(url);
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    setLoading(true, ids.length > 1
+      ? `Generando HU #${id} (${i + 1}/${ids.length})… puede tardar unos minutos`
+      : "Generando con el modelo local… puede tardar unos minutos");
+    await streamOne(id, quantity, instructions);
+  }
+  setLoading(false);
 
-  es.addEventListener("start", (e) => {
-    const d = JSON.parse(e.data);
-    setProgress(3, `Preparando modelo (est. ${d.estimated_tokens} tokens)…`);
-  });
-
-  es.addEventListener("progress", (e) => {
-    const d = JSON.parse(e.data);
-    setProgress(
-      d.percent,
-      `Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
-    );
-  });
-
-  es.addEventListener("done", (e) => {
-    const d = JSON.parse(e.data);
-    es.close();
-    setProgress(100, "Completado");
-    setLoading(false);
-    state.workItem = d.work_item || state.workItem;
-    state.testCases = d.test_cases;
-    showHu(state.workItem);
-    $("summary").textContent = d.summary || "";
-    renderCases(state.testCases);
-    $("card-results").classList.remove("hidden");
-    setChip("chip-ok", "conectado");
-  });
-
-  es.addEventListener("error", (e) => {
-    es.close();
-    setLoading(false);
+  if (!state.testCases.length) {
     setChip("chip-err", "error");
-    if (e.data) {
-      try { alert(JSON.parse(e.data).detail); } catch { alert("Error al generar"); }
-    } else {
-      alert("No se pudo conectar con el servidor de generación.");
-    }
+    return;
+  }
+  renderResults();
+  setChip("chip-ok", "conectado");
+}
+
+function streamOne(id, quantity, instructions) {
+  return new Promise((resolve) => {
+    const url = `/api/generate-stream?work_item_id=${id}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
+    const es = new EventSource(url);
+
+    es.addEventListener("start", () => {
+      setProgress(2, `Conectando HU #${id}…`);
+    });
+
+    es.addEventListener("progress", (e) => {
+      const d = JSON.parse(e.data);
+      setProgress(
+        d.percent,
+        `HU #${id} · Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
+      );
+    });
+
+    es.addEventListener("done", (e) => {
+      const d = JSON.parse(e.data);
+      es.close();
+      const wi = d.work_item;
+      state.workItem = wi;
+      state.huMap[wi.id] = { title: wi.title, criteriaList: wi.criteria_list || [] };
+      d.test_cases.forEach((tc) => {
+        tc.work_item_id = wi.id;
+        tc.criterios = tc.criterios || [];
+        state.testCases.push(tc);
+      });
+      resolve();
+    });
+
+    es.addEventListener("error", (e) => {
+      es.close();
+      let msg = "No se pudo conectar con el servidor de generación.";
+      if (e.data) {
+        try { msg = JSON.parse(e.data).detail; } catch { /* ignore */ }
+      }
+      alert(`HU #${id}: ${msg}`);
+      resolve();
+    });
   });
+}
+
+function renderResults() {
+  showHu(state.workItem);
+  $("summary").textContent = state.testCases.length + " casos en " + Object.keys(state.huMap).length + " HU";
+  renderCoverage();
+  renderCases(state.testCases);
+  $("card-results").classList.remove("hidden");
 }
 
 async function fetchHu() {
@@ -228,50 +312,77 @@ async function fetchHu() {
 }
 
 async function createCases() {
-  if (!state.workItem || !state.testCases.length) { alert("Primero genera casos"); return; }
-  setLoading(true);
-  try {
-    const data = await api("/api/create", {
-      method: "POST",
-      body: JSON.stringify({
-        work_item_id: state.workItem.id,
-        test_cases: state.testCases,
-      }),
-    });
-    const ok = data.created.map((c) => `#${c.id}`).join(", ");
-    $("create-result").textContent = data.demo
-      ? `MODO DEMO: no se insertó en Azure. Se enviarían ${data.count} test cases enlazados a la HU #${state.workItem.id}: ${ok}`
-      : data.error
-      ? `Se crearon ${data.created.length} y falló en: ${data.error}`
-      : `Creados ${data.count} test cases en Azure DevOps: ${ok} (enlazados a la HU #${state.workItem.id})`;
-    setChip("chip-ok", data.demo ? "demo" : "conectado");
-  } catch (err) {
-    setChip("chip-err", "error");
-    alert(err.message);
-  } finally {
-    setLoading(false);
+  if (!state.testCases.length) { alert("Primero genera casos"); return; }
+  setLoading(true, "Creando test cases en Azure DevOps…");
+
+  const groups = {};
+  state.testCases.forEach((tc) => {
+    const k = tc.work_item_id || (state.workItem && state.workItem.id) || 0;
+    (groups[k] = groups[k] || []).push(tc);
+  });
+
+  const allCreated = [];
+  let err = null;
+  let demo = false;
+  for (const [huId, cases] of Object.entries(groups)) {
+    try {
+      const data = await api("/api/create", {
+        method: "POST",
+        body: JSON.stringify({ work_item_id: Number(huId), test_cases: cases }),
+      });
+      allCreated.push(...(data.created || []));
+      if (data.demo) demo = true;
+      if (data.error) err = data.error;
+    } catch (e) {
+      err = e.message;
+      break;
+    }
   }
+  setLoading(false);
+
+  const ok = allCreated.map((c) => `#${c.id}`).join(", ");
+  $("create-result").textContent = demo
+    ? `MODO DEMO: no se insertó en Azure. Se enviarían ${allCreated.length} test cases: ${ok}`
+    : err
+    ? `Se crearon ${allCreated.length} y falló en: ${err}`
+    : `Creados ${allCreated.length} test cases en Azure DevOps: ${ok}`;
+  setChip("chip-ok", demo ? "demo" : "conectado");
 }
 
 function addCaseManual() {
+  const huId = state.workItem && state.workItem.id;
   state.testCases.push({
     title: "",
     description: "",
     priority: 2,
     type: "funcional",
     preconditions: "",
+    criterios: [],
+    work_item_id: huId,
     steps: [{ action: "", expected: "" }],
   });
   renderCases(state.testCases);
+  renderCoverage();
   $("card-results").classList.remove("hidden");
 }
 
 function reset() {
-  state = { workItem: null, testCases: [] };
+  state = { workItem: null, testCases: [], huMap: {} };
   $("card-hu").classList.add("hidden");
   $("card-results").classList.add("hidden");
   $("create-result").textContent = "";
   $("summary").textContent = "";
+}
+
+const PRESETS = {
+  smoke: "Genera casos smoke que validen el flujo principal de la HU (camino feliz).",
+  regresion: "Enfócate en casos de regresión: validar que funcionalidades existentes no se rompan.",
+  seguridad: "Enfócate en casos de seguridad: autenticación, autorización, inyección y datos sensibles.",
+  usabilidad: "Enfócate en casos de usabilidad y experiencia de usuario.",
+};
+
+function applyPreset(name) {
+  $("instructions").value = name === "clear" ? "" : PRESETS[name];
 }
 
 $("btn-generate").addEventListener("click", generate);
@@ -279,6 +390,10 @@ $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-add-case").addEventListener("click", addCaseManual);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
+
+document.querySelectorAll(".preset-btn").forEach((b) => {
+  b.addEventListener("click", () => applyPreset(b.dataset.preset));
+});
 
 (async function init() {
   try {
