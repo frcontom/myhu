@@ -31,6 +31,27 @@ def build_prompt(
         f"{i}. {c}" for i, c in enumerate(criteria, start=1)
     ) or "(sin criterios de aceptación)"
 
+    if quantity <= 2:
+        min_steps = 5
+        depth_directive = (
+            f"Como solo se generarán {quantity} casos, CADA caso debe ser EXHAUSTIVO y autosuficiente:\n"
+            "  - mínimo 5 pasos, con acciones detalladas y resultados verificables.\n"
+            "  - precondiciones completas (datos de entrada, estado, permisos, entorno).\n"
+            "  - cubrir el mayor número de criterios de aceptación posible, incluyendo variantes negativas y de límite.\n"
+            "  - descripción clara del objetivo y del riesgo que mitiga."
+        )
+    elif quantity <= 4:
+        min_steps = 3
+        depth_directive = (
+            "Cada caso debe ser detallado y cubrir bien su escenario:\n"
+            "  - mínimo 3 pasos, con acciones claras.\n"
+            "  - precondiciones concretas (datos, estado, permisos).\n"
+            "  - incluir variantes negativas o de límite cuando apliquen."
+        )
+    else:
+        min_steps = 2
+        depth_directive = "Casos directos y variados: mínimo 2 pasos cada uno."
+
     return f"""
 Eres un QA senior especializado en diseño de casos de prueba.
 
@@ -49,6 +70,9 @@ Tipo: {work_item.get('type')}
 
 ## REQUISITOS EXTRA DEL QA
 {instructions or '(ninguno, usa tu criterio)'}
+
+## CALIDAD POR CANTIDAD
+{depth_directive}
 
 ## REGLAS DE SALIDA
 1. Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown.
@@ -69,7 +93,7 @@ Tipo: {work_item.get('type')}
     }}
   ]
 }}
-3. Cada caso debe tener al menos 2 pasos y cada paso debe tener action y expected.
+3. Cada caso debe tener al menos {min_steps} pasos y cada paso debe tener action y expected.
 4. "criterios" es la lista de índices (empezando en 1) de los Criterios de Aceptación que ese caso cubre; puede ser vacía [].
 5. Los casos deben ser variados: feliz, negativos, límites, edge cases.
 """.strip()
