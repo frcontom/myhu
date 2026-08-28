@@ -17,5 +17,15 @@ class Settings(BaseSettings):
     def api_base(self) -> str:
         return f"https://dev.azure.com/{self.azure_devops_org}"
 
+    @property
+    def is_configured(self) -> bool:
+        return bool(
+            self.azure_devops_org and self.azure_devops_project and self.azure_devops_pat
+        )
+
+    @property
+    def demo_mode(self) -> bool:
+        return not self.is_configured
+
 
 settings = Settings()

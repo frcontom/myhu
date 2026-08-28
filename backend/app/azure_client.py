@@ -10,6 +10,26 @@ class AzureDevOpsError(Exception):
     pass
 
 
+def sample_work_item(work_item_id: int) -> Dict[str, Any]:
+    return {
+        "id": work_item_id,
+        "type": "User Story",
+        "title": "[DEMO] Inicio de sesión de usuario",
+        "description": (
+            "Como usuario registrado, quiero iniciar sesión con mi correo y contraseña "
+            "para acceder a mi cuenta de forma segura."
+        ),
+        "acceptance_criteria": (
+            "1. El usuario puede iniciar sesión con credenciales válidas.\n"
+            "2. Se muestra un mensaje de error claro si las credenciales son inválidas.\n"
+            "3. La cuenta se bloquea tras 5 intentos fallidos consecutivos.\n"
+            "4. Hay un enlace para recuperar la contraseña olvidada."
+        ),
+        "state": "New",
+        "created_by": "Modo DEMO (sin Azure DevOps)",
+    }
+
+
 class AzureDevOpsClient:
     def __init__(self) -> None:
         self._base = settings.api_base

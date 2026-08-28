@@ -212,10 +212,12 @@ async function createCases() {
       }),
     });
     const ok = data.created.map((c) => `#${c.id}`).join(", ");
-    $("create-result").textContent = data.error
+    $("create-result").textContent = data.demo
+      ? `MODO DEMO: no se insertó en Azure. Se enviarían ${data.count} test cases enlazados a la HU #${state.workItem.id}: ${ok}`
+      : data.error
       ? `Se crearon ${data.created.length} y falló en: ${data.error}`
       : `Creados ${data.count} test cases en Azure DevOps: ${ok} (enlazados a la HU #${state.workItem.id})`;
-    setChip("chip-ok", "conectado");
+    setChip("chip-ok", data.demo ? "demo" : "conectado");
   } catch (err) {
     setChip("chip-err", "error");
     alert(err.message);
@@ -254,7 +256,10 @@ $("btn-reset").addEventListener("click", reset);
 (async function init() {
   try {
     const h = await api("/api/health");
-    setChip("chip-ok", `ok · ${h.model}`);
+    setChip("chip-ok", h.demo_mode ? "demo" : `ok · ${h.model}`);
+    if (h.demo_mode) {
+      $("demo-banner").classList.remove("hidden");
+    }
   } catch {
     setChip("chip-err", "sin conexión");
   }
