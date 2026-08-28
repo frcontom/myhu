@@ -248,11 +248,21 @@ function streamOne(id, quantity, instructions) {
     const url = `/api/generate-stream?work_item_id=${id}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
     const es = new EventSource(url);
 
+    let warmSec = 0;
+    const ticker = setInterval(() => {
+      warmSec += 1;
+      setProgress(
+        Math.min(2 + warmSec / 3, 20),
+        `Cargando modelo para HU #${id}… ${warmSec}s (primera vez hasta 1 min)`
+      );
+    }, 1000);
+
     es.addEventListener("start", () => {
-      setProgress(2, `Conectando HU #${id}…`);
+      setProgress(2, `Cargando modelo para HU #${id}… primera vez puede tardar hasta 1 min`);
     });
 
     es.addEventListener("progress", (e) => {
+      clearInterval(ticker);
       const d = JSON.parse(e.data);
       setProgress(
         d.percent,
@@ -261,6 +271,7 @@ function streamOne(id, quantity, instructions) {
     });
 
     es.addEventListener("done", (e) => {
+      clearInterval(ticker);
       const d = JSON.parse(e.data);
       es.close();
       const wi = d.work_item;
@@ -275,6 +286,7 @@ function streamOne(id, quantity, instructions) {
     });
 
     es.addEventListener("error", (e) => {
+      clearInterval(ticker);
       es.close();
       let msg = "No se pudo conectar con el servidor de generación.";
       if (e.data) {
