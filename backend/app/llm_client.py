@@ -19,6 +19,23 @@ class TestCaseGenerationError(Exception):
     pass
 
 
+def _extract_min_steps(instructions: str) -> Optional[int]:
+    if not instructions:
+        return None
+    patterns = [
+        r"por\s+lo\s+menos\s+(\d+)\s+pasos",
+        r"al\s+menos\s+(\d+)\s+pasos",
+        r"m[ií]nimo\s+(\d+)\s+pasos",
+        r"(\d+)\s+pasos\s+a\s+validar",
+        r"(\d+)\s+pasos\s+por\s+caso",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, instructions, re.IGNORECASE)
+        if match:
+            return max(2, min(int(match.group(1)), 20))
+    return None
+
+
 def build_prompt(
     work_item: Dict[str, Any],
     quantity: int,
@@ -31,7 +48,14 @@ def build_prompt(
         f"{i}. {c}" for i, c in enumerate(criteria, start=1)
     ) or "(sin criterios de aceptación)"
 
-    if quantity <= 2:
+    requested_steps = _extract_min_steps(instructions)
+    if requested_steps:
+        min_steps = requested_steps
+        depth_directive = (
+            f"El QA solicitó EXPLÍCITAMENTE al menos {min_steps} pasos por caso. "
+            "Genera pasos detallados y suficientes para validar a fondo cada escenario."
+        )
+    elif quantity <= 2:
         min_steps = 5
         depth_directive = (
             f"Como solo se generarán {quantity} casos, CADA caso debe ser EXHAUSTIVO y autosuficiente:\n"
@@ -51,6 +75,16 @@ def build_prompt(
     else:
         min_steps = 2
         depth_directive = "Casos directos y variados: mínimo 2 pasos cada uno."
+
+    if criteria:
+        coverage_directive = (
+            f"COBERTURA OBLIGATORIA: los {quantity} casos, en conjunto, deben cubrir TODOS los criterios de aceptación. "
+            "Cada caso debe validar la mayor cantidad de criterios posible y reflejarlo en su campo 'criterios'. "
+            "Si la cantidad solicitada es pequeña, haz que cada caso abarque varios criterios en sus pasos. "
+            "Indica en 'summary' si algún criterio quedó sin cubrir."
+        )
+    else:
+        coverage_directive = ""
 
     return f"""
 Eres un QA senior especializado en diseño de casos de prueba.
@@ -73,6 +107,8 @@ Tipo: {work_item.get('type')}
 
 ## CALIDAD POR CANTIDAD
 {depth_directive}
+
+{coverage_directive}
 
 ## REGLAS DE SALIDA
 1. Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown.
@@ -189,6 +225,18 @@ def stream_test_cases(
             "data": {"detail": "El modelo no generó casos de prueba."},
         }
         return
+
+    criteria_list = work_item.get("criteria_list") or []
+    if criteria_list:
+        covered = set()
+        for case in cases:
+            covered.update(case.get("criterios") or [])
+        uncovered = [i for i in range(1, len(criteria_list) + 1) if i not in covered]
+        if uncovered:
+            summary = (
+                summary
+                + f"\n⚠ Criterios sin cubrir: {', '.join(str(i) for i in uncovered)}"
+            ).strip()
 
     yield {
         "type": "done",

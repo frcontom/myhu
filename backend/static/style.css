@@ -168,7 +168,7 @@ textarea { resize: vertical; }
   flex-wrap: wrap;
 }
 
-.summary-text { font-size: 13px; color: var(--muted); }
+.summary-text { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
 
 .case {
   border: 1px solid var(--border);
