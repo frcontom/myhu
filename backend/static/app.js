@@ -368,6 +368,198 @@ function addCaseManual() {
   $("card-results").classList.remove("hidden");
 }
 
+const PLANTILLA_GPT = `Actúa como un QA Senior con más de 20 años de experiencia en testing funcional, backend, integración, seguridad y arquitectura de software.
+
+Activa el modo "Hacking QA" y realiza un análisis profundo, crítico y estructurado de la historia de usuario de este archivo.
+
+Trabaja con un enfoque profesional tipo ISTQB / QA Lead: pensamiento analítico, detección de riesgos y validación de reglas de negocio.
+
+INSTRUCCIONES:
+1. Analiza la HU en detalle: componentes funcionales, ambigüedades, riesgos y reglas de negocio implícitas.
+2. Mejora los casos de prueba existentes y añade los que hagan falta (no genéricos, que detecten errores en producción).
+3. Cada caso DEBE incluir: Título, Descripción (clara y profesional), Precondiciones SIEMPRE, Pasos, y Resultado Esperado por cada paso.
+4. Formato de pasos: cada paso con su propio resultado esperado (nunca agrupar).
+5. Cubre mínimo: happy path, validaciones, reglas de negocio, negativos importantes y escenarios críticos.
+6. Lenguaje profesional listo para Jira/TestRail.
+7. Al final incluye: Cobertura lograda y Riesgos detectados adicionales.
+8. CONSERVA el identificador "## Caso N" y las etiquetas "- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso.
+9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).`;
+
+function flatten(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildExportMd() {
+  const lines = [];
+  lines.push("# HISTORIA DE USUARIO");
+  const hu = state.workItem;
+  if (hu) {
+    lines.push(`- ID: ${hu.id}`);
+    lines.push(`- Título: ${flatten(hu.title)}`);
+    lines.push(`- Tipo: ${flatten(hu.type)}`);
+    lines.push(`- Descripción: ${flatten(hu.description)}`);
+    lines.push(`- Criterios de aceptación: ${flatten(hu.acceptance_criteria)}`);
+  } else {
+    lines.push("- (no hay HU cargada)");
+  }
+  lines.push("");
+  lines.push("# CASOS DE PRUEBA");
+  state.testCases.forEach((tc, i) => {
+    lines.push(`## Caso ${i + 1}`);
+    lines.push(`- Título: ${flatten(tc.title)}`);
+    lines.push(`- Descripción: ${flatten(tc.description)}`);
+    lines.push(`- Prioridad: ${tc.priority}`);
+    lines.push(`- Tipo: ${flatten(tc.type)}`);
+    lines.push(`- Precondiciones: ${flatten(tc.preconditions)}`);
+    lines.push(`- Criterios que cubre: ${(tc.criterios || []).join(", ")}`);
+    lines.push("- Pasos:");
+    (tc.steps || []).forEach((s, j) => {
+      lines.push(`    ${j + 1}. ${flatten(s.action)} -> ${flatten(s.expected)}`);
+    });
+    lines.push("");
+  });
+  lines.push("---");
+  lines.push("# INSTRUCCIONES PARA EL MODELO");
+  lines.push(PLANTILLA_GPT);
+  lines.push("");
+  lines.push("# JSON PARA REIMPORTAR (responde aquí el JSON con los casos mejorados)");
+  lines.push("```json");
+  lines.push(JSON.stringify(state.testCases, null, 2));
+  lines.push("```");
+  return lines.join("\n");
+}
+
+function exportToGpt() {
+  if (!state.testCases.length) { alert("Primero genera casos"); return; }
+  const md = buildExportMd();
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "casos_para_gpt.md";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(md).catch(() => {});
+  }
+  alert("Archivo descargado y copiado al portapapeles. Pégalo en ChatGPT, aplica la plantilla y vuelve con el archivo mejorado.");
+}
+
+function normalizeImported(raw) {
+  return raw.map((r) => ({
+    title: flatten(r.title),
+    description: flatten(r.description),
+    priority: Number(r.priority) || 2,
+    type: flatten(r.type) || "funcional",
+    preconditions: flatten(r.preconditions),
+    criterios: Array.isArray(r.criterios)
+      ? r.criterios.map((n) => Number(n)).filter((n) => !isNaN(n))
+      : [],
+    work_item_id: r.work_item_id || (state.workItem && state.workItem.id),
+    steps: (r.steps || []).map((s) => ({
+      action: flatten(s.action),
+      expected: flatten(s.expected),
+    })),
+  }));
+}
+
+function parseMdCases(text) {
+  const cases = [];
+  let current = null;
+  let inSteps = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^##\s+Caso/i.test(line)) {
+      if (current) cases.push(current);
+      current = { steps: [] };
+      inSteps = false;
+      continue;
+    }
+    if (!current) continue;
+    const stepMatch = line.match(/^(\d+)\.\s+(.*?)\s*->\s*(.*)$/);
+    if (stepMatch) {
+      current.steps.push({ action: stepMatch[2].trim(), expected: stepMatch[3].trim() });
+      inSteps = true;
+      continue;
+    }
+    const kv = line.match(/^- ([^:]+):\s*(.*)$/);
+    if (kv) {
+      const key = kv[1].toLowerCase();
+      const value = kv[2].trim();
+      if (key === "pasos") { inSteps = true; continue; }
+      inSteps = false;
+      if (key === "título" || key === "titulo") current.title = value;
+      else if (key === "descripción" || key === "descripcion") current.description = value;
+      else if (key === "prioridad") current.priority = Number(value) || 2;
+      else if (key === "tipo") current.type = value;
+      else if (key === "precondiciones") current.preconditions = value;
+      else if (key === "criterios que cubre") current.criterios = value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
+      continue;
+    }
+    if (inSteps && line) {
+      const last = current.steps.length;
+      if (last > 0) {
+        const lastStep = current.steps[last - 1];
+        if (!lastStep.expected && !/->/.test(line)) {
+          lastStep.expected = line;
+        }
+      }
+    }
+  }
+  if (current) cases.push(current);
+  return cases;
+}
+
+function parseImportText(text) {
+  const jsonBlock = text.match(/```json\s*([\s\S]*?)```/i);
+  if (jsonBlock) {
+    const data = JSON.parse(jsonBlock[1]);
+    const arr = Array.isArray(data) ? data : data.test_cases;
+    if (Array.isArray(arr)) return normalizeImported(arr);
+  }
+  try {
+    const data = JSON.parse(text);
+    const arr = Array.isArray(data) ? data : data.test_cases;
+    if (Array.isArray(arr)) return normalizeImported(arr);
+  } catch { /* no es json */ }
+  return normalizeImported(parseMdCases(text));
+}
+
+function importFromGpt() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".md,.json,.txt";
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const cases = parseImportText(String(reader.result));
+        if (!cases.length) { alert("No se encontraron casos en el archivo."); return; }
+        state.testCases = cases;
+        if (!state.workItem) {
+          state.workItem = {
+            id: cases[0].work_item_id,
+            title: "HU importada",
+            type: "User Story",
+            description: "",
+            acceptance_criteria: "",
+            criteria_list: [],
+            state: "",
+            created_by: "",
+          };
+        }
+        renderResults();
+        alert(`Se importaron ${cases.length} casos. Revisa el editor y luego crea en Azure DevOps.`);
+      } catch (e) {
+        alert("No se pudo importar el archivo: " + e.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
 function reset() {
   state = { workItem: null, testCases: [], huMap: {} };
   $("card-hu").classList.add("hidden");
@@ -390,6 +582,8 @@ function applyPreset(name) {
 $("btn-generate").addEventListener("click", generate);
 $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-add-case").addEventListener("click", addCaseManual);
+$("btn-export-gpt").addEventListener("click", exportToGpt);
+$("btn-import-gpt").addEventListener("click", importFromGpt);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
 
