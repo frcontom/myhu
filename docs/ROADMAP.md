@@ -13,6 +13,10 @@ Funcional de punta a punta:
 - [x] Creación de `Test Case` en Azure DevOps enlazados a la HU (`POST /api/create`).
 - [x] **Modo demo**: funciona sin Azure DevOps (HU de ejemplo + creación simulada), con banner en el front.
 - [x] **Barra de progreso en vivo**: streaming SSE desde Ollama (tokens, velocidad, tiempo transcurrido).
+- [x] **Exactitud de cantidad**: recorte si el modelo se pasa y reintento si faltan.
+- [x] **Prompt adaptativo**: mínimo de pasos según cantidad y honor de "N pasos" explícito del QA.
+- [x] **Pasar a GPT / Importar**: exporta HU+casos a `.md` con plantilla y bloque JSON, y re-importa la mejora.
+- [x] **Probar conexión Azure**: botón que valida org + PAT + proyecto + permisos Work Items.
 - [x] Prueba end-to-end en modo demo: `/api/generate-stream` con 2 casos ≈ 52 s (6.8 tokens/s) en CPU.
 - [x] Manejo de errores con `detail` legible (front usa `alert`).
 - [x] `docker-compose.yml` (backend + ollama), `.env.example`, README, AGENTS.md.
@@ -22,7 +26,7 @@ Funcional de punta a punta:
 - `python -m py_compile` sobre los 4 módulos del backend: OK.
 - `docker compose config --quiet`: OK.
 - Lógica pura de `steps_to_tcm_html` y `_parse_json` verificada con un script standalone: OK.
-- **Pendiente:** prueba end-to-end contra Azure DevOps real y contra Ollama (requiere `.env` con PAT real y la descarga del modelo).
+- **Pendiente (bloqueante para uso real):** prueba end-to-end contra **Azure DevOps real** — llenar `.env` con org/proyecto/PAT reales y usar el botón "Probar conexión Azure" + crear un Test Case real. Mientras tanto todo se valida en modo demo.
 
 ## Próximos pasos sugeridos
 

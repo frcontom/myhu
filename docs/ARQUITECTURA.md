@@ -37,7 +37,8 @@ app.js ──POST /api/create──► main.create()
 | Método | Ruta | Body | Respuesta |
 |--------|------|------|-----------|
 | GET | `/api/health` | — | `{status, model, azure_configured, demo_mode, ollama_url}` |
-| GET | `/api/hu/{id}` | — | HU normalizada `{id, type, title, description, acceptance_criteria, state, created_by}` |
+| GET | `/api/test-azure` | — | `{ok, report{org_ok,pat_ok,project_found,wit_access_ok}, error, message}` (valida conexión) |
+| GET | `/api/hu/{id}` | — | HU normalizada `{id, type, title, description, acceptance_criteria, criteria_list, state, created_by}` |
 | POST | `/api/generate` | `{work_item_id, quantity(1-50), instructions}` | `{work_item, summary, test_cases[]}` (bloqueante) |
 | GET | `/api/generate-stream` | query params | **SSE**: `start` → `progress*` → `done` / `error` |
 | POST | `/api/create` | `{work_item_id, test_cases[]}` | `{created[], count, linked_to_work_item}` (o `{created, error}` si falla a mitad) |
@@ -62,12 +63,16 @@ El front consume con `EventSource` y pinta la barra de progreso en vivo (`app.js
   "priority": 1,
   "type": "funcional",
   "preconditions": "...",
+  "criterios": [1, 3],
   "steps": [{"action": "...", "expected": "..."}]
 }
 ```
 
-- La `description` se guarda en el campo `System.Description` del Test Case (ver `azure_client.create_test_case`).
+- La `description` se guarda en el campo `System.Description` del Test Case.
+- La `priority` se guarda en `Microsoft.VSTS.Common.Priority` (desde `main.py:create`).
 - Los pasos son pares `action` (Acción) + `expected` (Resultado esperado); en el front se editan como inputs.
+- El `type` no se envía a Azure (el Test Case no tiene ese campo estándar); es solo organizativo en el editor.
+- `criterios` referencia índices (1-based) de `criteria_list` de la HU; alimenta el panel de cobertura.
 
 ## Integración Azure DevOps
 

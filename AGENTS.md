@@ -64,6 +64,19 @@ azureDevops/
 6. **Front** envía `POST /api/create` con `{work_item_id, test_cases[]}`.
 7. `azure_client.create_test_case` crea cada work item `$Test Case` con `Microsoft.VSTS.TCM.Steps` (HTML) y una relación `Microsoft.VSTS.Common.Tests` hacia la HU.
 
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/health` | Estado, modelo, `azure_configured`, `demo_mode` |
+| GET | `/api/test-azure` | Valida org + PAT + proyecto + permisos Work Items (botón "Probar conexión Azure") |
+| GET | `/api/hu/{id}` | HU normalizada (incluye `criteria_list`) |
+| GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo) |
+| POST | `/api/generate` | Generación bloqueante |
+| POST | `/api/create` | Crea Test Cases en Azure enlazados a la HU |
+
+## Flujo "Pasar a GPT" (sin API de OpenAI)
+
+El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual: el front exporta un `.md` (`casos_para_gpt.md`) con HU + casos + plantilla "Hacking QA" embebida + bloque ```` ```json ```` reimportable. El usuario pega el archivo en ChatGPT, mejora los casos, y **re-importa** la respuesta. El import (`parseImportText` en `app.js`) prefiere el bloque JSON, luego JSON completo, luego parseo de markdown (`## Caso N` + etiquetas). No hay backend involucrado en esto (todo frontend).
+
 ## Puntos críticos del código (no romper)
 
 - **`azure_client.py:23`**: auth Basic con usuario vacío → `base64(":PAT")`. Formato obligatorio.

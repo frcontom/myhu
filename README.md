@@ -16,101 +16,137 @@ Genera casos de prueba automáticamente a partir de una Historia de Usuario de A
 
 ## Requisitos
 
-- Docker Desktop en Windows.
-- Un PAT de Azure DevOps con permisos **Work Items → Read & Write**.
+- **Docker Desktop** en Windows (instalado y funcionando).
+- Una **cuenta de Azure DevOps** (gratis, puede ser la misma de Outlook/Hotmail/Microsoft).
+- Un **PAT** de Azure DevOps con permisos **Work Items → Read & Write** (ver Paso a paso abajo).
 
-## Montaje (3 pasos)
+## Montaje (4 pasos)
 
-### 1. Crear el `.env`
+### Paso 1. Crear el `.env`
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edita `.env` con el Bloc de notas y reemplaza **solo los valores** (no borres los nombres de las variables). Mientras estén los valores plantilla, la app corre en **modo demo**.
+Edita `.env` con el Bloc de notas y reemplaza **solo los valores** (nunca borres los nombres de las variables). Mientras estén los valores plantilla (`tu-organizacion`, `Tu-Proyecto`, `tu_pat_aqui`), la app corre en **modo demo** y NO crea nada en Azure.
 
-### Cómo llenar los valores de Azure DevOps
+---
 
-| Variable | Qué poner | Dónde lo encuentro |
-|----------|-----------|--------------------|
-| `AZURE_DEVOPS_ORG` | Nombre de la organización, **sin** `https://` | Es lo que sale en `https://dev.azure.com/<ESTO>`. Ej: `dev.azure.com/miempresa` → `AZURE_DEVOPS_ORG=miempresa` |
-| `AZURE_DEVOPS_PROJECT` | Nombre **exacto** del proyecto | Aparece al lado del logo cuando abres tu proyecto en el portal |
-| `AZURE_DEVOPS_PAT` | Tu Personal Access Token | Ver pasos abajo |
+## Paso a paso: de dónde sale cada dato del `.env`
 
-**Crear el PAT (Personal Access Token):**
-1. Entra a `https://dev.azure.com/<tu-org>/_usersSettings/tokens`.
-2. Clic en **+ New Token** → Nombre: `qa-testcase-generator`.
-3. **Organization**: tu organización.
-4. **Scopes**: expande **Work Items** y marca **Read & Write**.
-5. **Expiration**: 30 o 90 días.
-6. Clic en **Create** → **copia el token** (solo se muestra una vez) y pégalo en `AZURE_DEVOPS_PAT` sin comillas ni espacios.
+### 1. `AZURE_DEVOPS_ORG` (la organización)
 
-Ejemplo de `.env` ya llenado:
+1. Entra a **https://dev.azure.com** e inicia sesión con tu cuenta Microsoft.
+2. Fíjate en la **barra de direcciones**: `https://dev.azure.com/ESTO-ES-LA-ORG`.
+3. **ORG = todo lo que va después de `dev.azure.com/`**, sin `https://`, sin barras, sin espacios.
+   - Ejemplo: si la URL es `https://dev.azure.com/qa-corp` → `AZURE_DEVOPS_ORG=qa-corp`.
+4. ¿No tienes organización? Crea una **gratis** desde https://dev.azure.com → **New organization**.
+
+### 2. `AZURE_DEVOPS_PROJECT` (el proyecto)
+
+1. Dentro de tu organización, en el panel izquierdo aparece la lista de proyectos.
+2. Abre el proyecto donde están tus **Historias de Usuario**.
+3. El **nombre del proyecto** está arriba a la izquierda, al lado del logo. Cópialo **exacto** (respeta mayúsculas, espacios y acentos).
+   - Ejemplo: `Proyecto QA` → `AZURE_DEVOPS_PROJECT=Proyecto QA`.
+4. Para saber el **ID de una HU**: abre la historia y mira la URL, termina en `/_workitems/edit/12345` → el **12345** es el ID.
+
+### 3. `AZURE_DEVOPS_PAT` (el Personal Access Token)
+
+1. Entra a la página de tokens: **https://dev.azure.com/<tu-org>/_usersSettings/tokens**
+   - Alternativa: clic en tu **avatar** (arriba a la derecha) → **Personal Access Tokens**.
+2. Clic en **+ New Token** (botón azul).
+3. **Name**: `qa-testcase-generator` (o el que prefieras).
+4. **Organization**: tu organización (o "All accessible organizations").
+5. **Scopes**: clic en **Show all scopes** → busca **Work Items** → marca **Read & Write**.
+   - ⚠️ Mínimo imprescindible: `Work Items → Read & Write`.
+   - Si luego quieres Test Plans, agrega también `Test Management → Read & Write`.
+6. **Expiration**: 30 o 90 días (al vencer hay que crear otro y actualizar el `.env`).
+7. Clic en **Create**.
+8. ⚠️ **COPIA EL TOKEN EN ESE MOMENTO**: solo se muestra **una vez** (en color). Pégalo en `AZURE_DEVOPS_PAT` **sin comillas, sin espacios, sin saltos de línea**.
+9. Guarda el archivo.
+
+### Ejemplo de `.env` ya llenado
+
 ```
-AZURE_DEVOPS_ORG=miempresa
+AZURE_DEVOPS_ORG=qa-corp
 AZURE_DEVOPS_PROJECT=Proyecto QA
-AZURE_DEVOPS_PAT=xy7abcdefghijklmnopqrstuvwxyz1234567890
+AZURE_DEVOPS_PAT=xr6abcdefghijklmnopqrstuvwxyz1234567890
+OLLAMA_MODEL=qwen2.5:7b-instruct
 ```
 
-Después de guardar, reinicia con `docker compose up -d --build`. Si el banner amarillo "MODO DEMO" desaparece, estás conectado a Azure real.
+---
 
-### 2. Levantar
+### Paso 2. Levantar
 
 ```powershell
 docker compose up -d --build
 ```
 
-La primera vez descargará e instalará el modelo de Ollama (~4.7 GB para 7b). El backend espera a que el modelo esté listo; si hace falta, ejecuta manualmente:
+La primera vez descarga el modelo de Ollama (~4.7 GB). Si el modelo no está, ejecuta:
 
 ```powershell
 docker exec -it qa-testcase-ollama ollama pull qwen2.5:7b-instruct
 ```
 
-> El modelo configurado en `.env` debe estar descargado en Ollama (`docker exec -it qa-testcase-ollama ollama list`).
+### Paso 3. Verificar la conexión con Azure (NO te saltes este paso)
 
-### 3. Abrir
+1. Abre **http://localhost:8000** y pulsa **Ctrl+F5** (refresco limpio).
+2. El **banner amarillo "MODO DEMO" debe haber desaparecido**. Si sigue, el `.env` aún tiene valores plantilla → repite el Paso 1.
+3. Clic en el botón **"Probar conexión Azure"** → debe decir:
+   > "✔ Conexión OK: organización, PAT y proyecto válidos. Permisos de Work Items OK."
+4. Escribe el **ID de una HU real** y clic en **"Solo ver la HU"** → verás el título, descripción y criterios de esa historia.
 
-Ve a **http://localhost:8000**
+Si algo falla, mira la tabla de abajo.
 
-## Uso
+### Paso 4. Usar
 
-1. Ingresa el **ID de la HU**.
-2. Define la **cantidad** de casos esperada.
-3. Opcional: instrucciones extra (ej. "enfócate en negativos y seguridad").
-4. **Generar casos de prueba** → el agente lee la HU de Azure y el LLM local devuelve los casos.
-5. Revisa/edita cada caso (título, descripción, precondiciones, pasos).
-6. **Crear en Azure DevOps** → crea los `Test Case` enlazados a la HU (aparecerán en la pestaña "Tested by" de la HU y en Test Plans).
+1. Escribe el **ID de la HU** (y opcionalmente varios IDs separados por coma).
+2. Elige la **cantidad** de casos y las **instrucciones** (o un preset).
+3. **Generar casos de prueba** → el agente lee la HU de Azure y el LLM local genera los casos.
+4. **Revisa/edita** cada caso (título, descripción, precondiciones, pasos, criterios que cubre).
+5. (Opcional) **Pasar a GPT** → descarga `.md` para que ChatGPT (plan GO) mejore los casos → **Importar mejora de GPT**.
+6. **Crear en Azure DevOps** → crea los `Test Case` **enlazados a la HU** (aparecerán en la pestaña "Tested by" de la HU). El resultado muestra enlaces clicables a cada Test Case.
+
+---
+
+## Troubleshooting (si algo falla)
+
+| Síntoma | Causa | Solución |
+|---------|-------|----------|
+| 400 "Configura AZURE_DEVOPS_*" | `.env` con valores plantilla o vacíos | Llenar `.env` con valores reales (Paso 1) y `docker compose up -d --build` |
+| Banner "MODO DEMO" no desaparece | `.env` tiene `tu-organizacion` / `tu_pat_aqui` | Reemplazar por valores reales |
+| "Probar conexión" → org no válida / HTTP 404 | `AZURE_DEVOPS_ORG` mal escrita | Verificar la URL real `https://dev.azure.com/<org>`; sin `https://`, sin `/` |
+| HTTP 401 al probar | PAT incorrecto, con espacios, o vencido | Crear un PAT nuevo y pegarlo sin espacios (Paso 3) |
+| "El proyecto 'X' no aparece en la organización" | `AZURE_DEVOPS_PROJECT` mal escrito, o el PAT no cubre esa org/proyecto | Copiar el nombre exacto; en el PAT seleccionar "All accessible organizations" |
+| Sin permisos de Work Items (203/403) | El PAT no tiene `Work Items → Read & Write` | Editar/crear el PAT con ese scope (Paso 3, punto 5) |
+| 404 al leer la HU (`/api/hu/{id}`) | El ID no existe o el PAT no ve ese work item | Verificar el ID real en `/_workitems/edit/<ID>` |
+| `/api/generate` 502 "No se pudo conectar con Ollama" | El modelo no está descargado | `docker exec -it qa-testcase-ollama ollama pull qwen2.5:7b-instruct` |
+
+---
 
 ## Modo demo (sin Azure DevOps)
 
-Si no configuras `AZURE_DEVOPS_*` en el `.env`, el sistema entra en **modo demo**:
-
-- Se usa una Historia de Usuario de ejemplo ("Inicio de sesión de usuario").
-- La generación de casos con el LLM local funciona igual.
-- El botón "Crear en Azure DevOps" **simula** la creación (no inserta nada en Azure) y lo indica en el resultado.
-
-Es ideal para probar la herramienta antes de tener el PAT o para hacer demos.
+Si no configuras `AZURE_DEVOPS_*`, el sistema entra en **modo demo**: usa una HU de ejemplo, la generación con Ollama funciona igual, y el botón "Crear" **simula** (no inserta nada). Es ideal para probar antes de tener el PAT.
 
 ## Velocidad y barra de progreso
 
-- La generación es **lenta a propósito**: el modelo corre en CPU (sin GPU) y genera texto token a token. Un caso con varios pasos puede tardar ~30-60 s; 5 casos ~2-5 min.
-- Mientras genera, el front muestra una **barra de progreso en vivo** con tokens generados, velocidad (tokens/s) y tiempo transcurrido (streaming vía SSE).
-- **Consejos para acelerar** (editar `.env` y `docker compose up -d`):
-  - Cambiar `OLLAMA_MODEL=qwen2.5:3b-instruct` → ~2-3x más rápido (algo menos calidad). El 7b es el recomendado por calidad.
-  - Pedir menos casos por petición (los casos se pueden seguir agregando manualmente en el editor).
-  - El modelo queda cargado en RAM tras la primera generación (keep-alive 30 min), así que las siguientes son más rápidas.
+- La generación es lenta a propósito: el modelo corre en **CPU** y genera token a token (~7 tokens/s). 5 casos ≈ 2-5 min.
+- El front muestra una **barra de progreso en vivo** (tokens, tokens/s, tiempo) vía streaming SSE.
+- Para acelerar: `OLLAMA_MODEL=qwen2.5:3b-instruct` (~2-3x más rápido), pedir menos casos, o esperar la 2ª generación (el modelo queda cargado 30 min).
 
 ## Endpoints
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/api/health` | Estado del servicio y modelo |
+| GET | `/api/health` | Estado del servicio, modelo y si Azure está configurado |
+| GET | `/api/test-azure` | Valida org + PAT + proyecto + permisos de Work Items |
 | GET | `/api/hu/{id}` | Obtiene la HU de Azure DevOps |
-| POST | `/api/generate` | Genera casos con el LLM (`work_item_id`, `quantity`, `instructions`) |
+| GET | `/api/generate-stream` | Genera casos con streaming SSE (progreso en vivo) |
+| POST | `/api/generate` | Genera casos (bloqueante) |
 | POST | `/api/create` | Crea los test cases en Azure DevOps enlazados a la HU |
 
 ## Notas
 
-- El PAT nunca sale del contenedor; se lee desde `.env` (no versionado).
-- La conexión a Azure DevOps usa la REST API `api-version=7.1`.
-- Para cambiar de modelo solo edita `OLLAMA_MODEL` en `.env` y ejecuta `docker compose up -d`.
+- El PAT **nunca sale** del contenedor; se lee desde `.env` (que **no** se versiona).
+- La conexión usa la REST API `api-version=7.1`.
+- Para cambiar de modelo solo edita `OLLAMA_MODEL` en `.env` y `docker compose up -d`.
