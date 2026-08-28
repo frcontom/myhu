@@ -340,12 +340,14 @@ async function createCases() {
   }
   setLoading(false);
 
-  const ok = allCreated.map((c) => `#${c.id}`).join(", ");
-  $("create-result").textContent = demo
-    ? `MODO DEMO: no se insertó en Azure. Se enviarían ${allCreated.length} test cases: ${ok}`
+  const links = allCreated
+    .map((c) => (c.url ? `<a href="${c.url}" target="_blank" rel="noopener">#${c.id}</a>` : `#${c.id}`))
+    .join(", ");
+  $("create-result").innerHTML = demo
+    ? `MODO DEMO: no se insertó en Azure. Se enviarían ${allCreated.length} test cases: ${allCreated.map((c) => `#${c.id}`).join(", ")}`
     : err
     ? `Se crearon ${allCreated.length} y falló en: ${err}`
-    : `Creados ${allCreated.length} test cases en Azure DevOps: ${ok}`;
+    : `Creados ${allCreated.length} test cases en Azure DevOps: ${links}`;
   setChip("chip-ok", demo ? "demo" : "conectado");
 }
 
