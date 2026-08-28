@@ -93,6 +93,69 @@ class AzureDevOpsClient:
     def get_work_item_url(self, work_item_id: int) -> str:
         return f"https://dev.azure.com/{settings.azure_devops_org}/{self._project}/_apis/wit/workItems/{work_item_id}"
 
+    def test_connection(self) -> Dict[str, Any]:
+        report = {
+            "org_ok": False,
+            "pat_ok": False,
+            "project_found": False,
+            "wit_access_ok": False,
+        }
+        try:
+            resp = httpx.get(
+                f"{settings.api_base}/_apis/projects",
+                params={"api-version": "7.1"},
+                headers=self._auth,
+                timeout=30.0,
+            )
+        except httpx.HTTPError as exc:
+            return {"ok": False, "report": report, "error": f"No se pudo conectar con Azure: {exc}"}
+
+        if resp.status_code != 200:
+            return {
+                "ok": False,
+                "report": report,
+                "error": f"GET /_apis/projects -> HTTP {resp.status_code}: {resp.text[:200]}",
+            }
+
+        report["org_ok"] = True
+        report["pat_ok"] = True
+        projects = [p.get("name") for p in resp.json().get("value", [])]
+        if self._project not in projects:
+            return {
+                "ok": False,
+                "report": report,
+                "error": f"El proyecto '{self._project}' no aparece en la organización '{settings.azure_devops_org}'. Proyectos visibles: {projects[:10]}",
+            }
+
+        report["project_found"] = True
+        try:
+            resp2 = httpx.get(
+                self._url("/wit/workitemtypes"),
+                params={"api-version": "7.1"},
+                headers=self._auth,
+                timeout=30.0,
+            )
+        except httpx.HTTPError as exc:
+            return {"ok": False, "report": report, "error": f"Error al validar Work Items: {exc}"}
+
+        if resp2.status_code == 200:
+            report["wit_access_ok"] = True
+            return {
+                "ok": True,
+                "report": report,
+                "error": None,
+                "message": "Conexión OK: organización, PAT y proyecto válidos. Permisos de Work Items OK.",
+            }
+
+        return {
+            "ok": False,
+            "report": report,
+            "error": (
+                f"El PAT no tiene permisos de Work Items (HTTP {resp2.status_code}). "
+                "Revisa que el token tenga el scope 'Work Items → Read & Write'."
+            ),
+        }
+
     def create_test_case(
         self,
         title: str,

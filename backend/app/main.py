@@ -53,6 +53,16 @@ def health() -> dict:
     }
 
 
+@app.get("/api/test-azure")
+def test_azure() -> dict:
+    if not settings.is_configured:
+        raise HTTPException(status_code=400, detail="Configura AZURE_DEVOPS_* en el archivo .env")
+    try:
+        return azure_client.test_connection()
+    except AzureDevOpsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.get("/api/hu/{work_item_id}")
 def get_hu(work_item_id: int) -> dict:
     if settings.demo_mode:

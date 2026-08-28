@@ -597,6 +597,19 @@ function importFromGpt() {
   input.click();
 }
 
+async function testAzure() {
+  const out = $("azure-test-result");
+  out.textContent = "Probando conexión con Azure DevOps…";
+  try {
+    const d = await api("/api/test-azure");
+    out.textContent = d.ok ? "✔ " + d.message : "✖ " + d.error;
+    setChip(d.ok ? "chip-ok" : "chip-err", d.ok ? "azure ok" : "azure error");
+  } catch (err) {
+    out.textContent = "✖ " + err.message;
+    setChip("chip-err", "azure error");
+  }
+}
+
 function reset() {
   state = { workItem: null, testCases: [], huMap: {} };
   $("card-hu").classList.add("hidden");
@@ -618,6 +631,7 @@ function applyPreset(name) {
 
 $("btn-generate").addEventListener("click", generate);
 $("btn-fetch-hu").addEventListener("click", fetchHu);
+$("btn-test-azure").addEventListener("click", testAzure);
 $("btn-add-case").addEventListener("click", addCaseManual);
 $("btn-export-gpt").addEventListener("click", exportToGpt);
 $("btn-import-gpt").addEventListener("click", importFromGpt);

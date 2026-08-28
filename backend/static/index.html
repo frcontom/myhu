@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
   <header class="topbar">
@@ -53,7 +53,9 @@
       <div class="actions">
         <button id="btn-generate" class="btn btn-primary">Generar casos de prueba</button>
         <button id="btn-fetch-hu" class="btn btn-secondary">Solo ver la HU</button>
+        <button id="btn-test-azure" class="btn btn-ghost">Probar conexión Azure</button>
       </div>
+      <p id="azure-test-result" class="hint"></p>
       <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con el modelo local (Ollama).</p>
     </section>
 
@@ -87,6 +89,6 @@
     <p id="loader-stats" class="loader-stats"></p>
   </div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
