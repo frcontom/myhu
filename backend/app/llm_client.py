@@ -44,18 +44,16 @@ Tipo: {work_item.get('type')}
 2. La estructura debe ser exactamente:
 {{
   "summary": "resumen breve del enfoque de pruebas",
-"test_cases": [
-    {
+  "test_cases": [
+    {{
       "title": "TC-001: título descriptivo",
       "description": "descripción breve del caso",
       "priority": 1,
       "type": "funcional|regresion|integracion|usabilidad|rendimiento|seguridad",
       "preconditions": "precondiciones o vacío",
       "steps": [
-        {"action": "paso de acción", "expected": "resultado esperado"}
+        {{"action": "paso de acción", "expected": "resultado esperado"}}
       ]
-    }
-  ]
     }}
   ]
 }}
