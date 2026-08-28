@@ -26,8 +26,10 @@ def _extract_min_steps(instructions: str) -> Optional[int]:
         r"por\s+lo\s+menos\s+(\d+)\s+pasos",
         r"al\s+menos\s+(\d+)\s+pasos",
         r"m[ií]nimo\s+(\d+)\s+pasos",
+        r"(?:créame|craame|hazme|haz|haga|genérame|genera|dame|crea)\s+(\d+)\s+pasos",
         r"(\d+)\s+pasos\s+a\s+validar",
         r"(\d+)\s+pasos\s+por\s+caso",
+        r"\b(\d+)\s+pasos\b",
     ]
     for pattern in patterns:
         match = re.search(pattern, instructions, re.IGNORECASE)
@@ -53,6 +55,8 @@ def build_prompt(
         min_steps = requested_steps
         depth_directive = (
             f"El QA solicitó EXPLÍCITAMENTE al menos {min_steps} pasos por caso. "
+            f"NO entregues menos de {min_steps} pasos en cada caso; usa pasos adicionales "
+            "para validar caracteres especiales, valores límite, negativos y bordes. "
             "Genera pasos detallados y suficientes para validar a fondo cada escenario."
         )
     elif quantity <= 2:

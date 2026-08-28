@@ -445,11 +445,16 @@ function exportToGpt() {
   if (!state.testCases.length) { alert("Primero genera casos"); return; }
   const md = buildExportMd();
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = "casos_para_gpt.md";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }, 1000);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(md).catch(() => {});
   }
