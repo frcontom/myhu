@@ -387,18 +387,26 @@ Activa el modo "Hacking QA" y realiza un análisis profundo, crítico y estructu
 Trabaja con un enfoque profesional tipo ISTQB / QA Lead: pensamiento analítico, detección de riesgos y validación de reglas de negocio.
 
 INSTRUCCIONES:
-1. Analiza la HU en detalle: componentes funcionales, ambigüedades, riesgos y reglas de negocio implícitas.
+1. La Historia de Usuario está en la sección "# HISTORIA DE USUARIO" al inicio del archivo: úsala como FUENTE DE VERDAD para todo tu análisis (componentes funcionales, ambigüedades, riesgos y reglas de negocio implícitas).
 2. Mejora los casos de prueba existentes y añade los que hagan falta (no genéricos, que detecten errores en producción).
 3. Cada caso DEBE incluir: Título, Descripción (clara y profesional), Precondiciones SIEMPRE, Pasos, y Resultado Esperado por cada paso.
 4. Formato de pasos: cada paso con su propio resultado esperado (nunca agrupar).
 5. Cubre mínimo: happy path, validaciones, reglas de negocio, negativos importantes y escenarios críticos.
 6. Lenguaje profesional listo para Jira/TestRail.
 7. Al final incluye: Cobertura lograda y Riesgos detectados adicionales.
-8. CONSERVA el identificador "## Caso N" y las etiquetas "- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso.
+8. CONSERVA el identificador "## Caso N" y las etiquetas "- HU origen:/- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso. NO cambies el "- HU origen:" de ningún caso (indica la historia de usuario a la que pertenece).
 9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).`;
 
 function flatten(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function huTitleFor(id) {
+  if (!id) return "";
+  const hu = state.huMap[id];
+  if (hu) return hu.title;
+  if (state.workItem && state.workItem.id === id) return state.workItem.title;
+  return "";
 }
 
 function buildExportMd() {
@@ -417,7 +425,9 @@ function buildExportMd() {
   lines.push("");
   lines.push("# CASOS DE PRUEBA");
   state.testCases.forEach((tc, i) => {
+    const huId = tc.work_item_id || (state.workItem && state.workItem.id);
     lines.push(`## Caso ${i + 1}`);
+    lines.push(`- HU origen: #${huId} ${flatten(huTitleFor(huId))}`);
     lines.push(`- Título: ${flatten(tc.title)}`);
     lines.push(`- Descripción: ${flatten(tc.description)}`);
     lines.push(`- Prioridad: ${tc.priority}`);
@@ -509,6 +519,10 @@ function parseMdCases(text) {
       else if (key === "prioridad") current.priority = Number(value) || 2;
       else if (key === "tipo") current.type = value;
       else if (key === "precondiciones") current.preconditions = value;
+      else if (key === "hu origen" || key === "hu") {
+        const m = value.match(/#(\d+)/);
+        if (m) current.work_item_id = Number(m[1]);
+      }
       else if (key === "criterios que cubre") current.criterios = value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
       continue;
     }
