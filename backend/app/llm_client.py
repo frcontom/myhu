@@ -97,6 +97,88 @@ def stream_test_cases(
     estimated = min(quantity * AVG_TOKENS_PER_CASE, settings.ollama_max_tokens)
     yield {"type": "start", "data": {"estimated_tokens": estimated}}
 
+    cases: List[Dict[str, Any]] = []
+    summary = ""
+    current_prompt = prompt
+
+    for attempt in range(1, 3):
+        last_text = None
+        error = None
+        for event in _stream_once(current_prompt, estimated):
+            if event["type"] == "result":
+                last_text = event["text"]
+                error = event["error"]
+                break
+            yield event
+
+        if error:
+            yield {"type": "error", "data": {"detail": error}}
+            return
+
+        try:
+            data = _parse_json(last_text)
+        except Exception as exc:
+            yield {
+                "type": "error",
+                "data": {"detail": f"No se pudo interpretar la respuesta del modelo: {exc}"},
+            }
+            return
+
+        if isinstance(data, dict):
+            if not summary:
+                summary = data.get("summary", "")
+            raw_cases = data.get("test_cases") or []
+            if isinstance(raw_cases, list):
+                cases.extend(
+                    _normalize_case(c, len(cases) + i + 1)
+                    for i, c in enumerate(raw_cases)
+                )
+
+        if len(cases) >= quantity:
+            break
+
+        missing = quantity - len(cases)
+        current_prompt = (
+            prompt
+            + f"\n\nIMPORTANTE: hasta ahora solo generaste {len(cases)} casos. "
+            f"Genera EXACTAMENTE {missing} casos adicionales (numerados TC-{len(cases) + 1:03d} en adelante). "
+            "Devuelve únicamente el JSON con esos casos adicionales."
+        )
+        estimated = min(max(missing, 1) * AVG_TOKENS_PER_CASE, settings.ollama_max_tokens)
+        yield {
+            "type": "progress",
+            "data": {
+                "tokens": 0,
+                "elapsed": 0.0,
+                "tokens_per_sec": 0.0,
+                "percent": 0,
+                "estimated": estimated,
+                "note": f"Reintentando: faltan {missing} casos…",
+            },
+        }
+
+    cases = cases[:quantity]
+
+    if not cases:
+        yield {
+            "type": "error",
+            "data": {"detail": "El modelo no generó casos de prueba."},
+        }
+        return
+
+    yield {
+        "type": "done",
+        "data": {
+            "summary": summary,
+            "test_cases": cases,
+        },
+    }
+
+
+def _stream_once(
+    prompt: str,
+    estimated: int,
+) -> Iterator[Dict[str, Any]]:
     payload = {
         "model": settings.ollama_model,
         "prompt": prompt,
@@ -123,8 +205,9 @@ def stream_test_cases(
         ) as resp:
             if resp.status_code != 200:
                 yield {
-                    "type": "error",
-                    "data": {"detail": f"Ollama respondió HTTP {resp.status_code}"},
+                    "type": "result",
+                    "text": None,
+                    "error": f"Ollama respondió HTTP {resp.status_code}",
                 }
                 return
 
@@ -161,42 +244,13 @@ def stream_test_cases(
                     }
     except httpx.HTTPError as exc:
         yield {
-            "type": "error",
-            "data": {"detail": f"No se pudo conectar con Ollama ({settings.ollama_url}): {exc}"},
+            "type": "result",
+            "text": None,
+            "error": f"No se pudo conectar con Ollama ({settings.ollama_url}): {exc}",
         }
         return
 
-    try:
-        data = _parse_json(buf)
-    except Exception as exc:
-        yield {
-            "type": "error",
-            "data": {"detail": f"No se pudo interpretar la respuesta del modelo: {exc}"},
-        }
-        return
-
-    if not isinstance(data, dict):
-        yield {
-            "type": "error",
-            "data": {"detail": "La respuesta del modelo no es un objeto JSON."},
-        }
-        return
-
-    cases = data.get("test_cases") or []
-    if not isinstance(cases, list) or len(cases) == 0:
-        yield {
-            "type": "error",
-            "data": {"detail": "El modelo no generó casos de prueba."},
-        }
-        return
-
-    yield {
-        "type": "done",
-        "data": {
-            "summary": data.get("summary", ""),
-            "test_cases": [_normalize_case(c, i) for i, c in enumerate(cases, start=1)],
-        },
-    }
+    yield {"type": "result", "text": buf, "error": None}
 
 
 def _parse_json(text: str) -> Any:
