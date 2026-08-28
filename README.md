@@ -27,15 +27,32 @@ Genera casos de prueba automáticamente a partir de una Historia de Usuario de A
 Copy-Item .env.example .env
 ```
 
-Edita `.env` y pon:
-- `AZURE_DEVOPS_ORG`: nombre de tu organización (sin `https://`).
-- `AZURE_DEVOPS_PROJECT`: nombre del proyecto.
-- `AZURE_DEVOPS_PAT`: tu Personal Access Token.
-- `OLLAMA_MODEL`: modelo a usar. Por defecto `qwen2.5:7b-instruct` (~4.7 GB, recomendado para 7-8 GB de RAM libre). Alternativas según RAM:
-  - `qwen2.5:7b-instruct` → ~7 GB libres (recomendado)
-  - `qwen2.5:3b-instruct` → ~2 GB (PC muy justo)
-  - `qwen2.5:14b-instruct` → ~9 GB (necesitas 16 GB+)
-  - `qwen2.5:32b-instruct` → ~19 GB (GPU/32 GB)
+Edita `.env` con el Bloc de notas y reemplaza **solo los valores** (no borres los nombres de las variables). Mientras estén los valores plantilla, la app corre en **modo demo**.
+
+### Cómo llenar los valores de Azure DevOps
+
+| Variable | Qué poner | Dónde lo encuentro |
+|----------|-----------|--------------------|
+| `AZURE_DEVOPS_ORG` | Nombre de la organización, **sin** `https://` | Es lo que sale en `https://dev.azure.com/<ESTO>`. Ej: `dev.azure.com/miempresa` → `AZURE_DEVOPS_ORG=miempresa` |
+| `AZURE_DEVOPS_PROJECT` | Nombre **exacto** del proyecto | Aparece al lado del logo cuando abres tu proyecto en el portal |
+| `AZURE_DEVOPS_PAT` | Tu Personal Access Token | Ver pasos abajo |
+
+**Crear el PAT (Personal Access Token):**
+1. Entra a `https://dev.azure.com/<tu-org>/_usersSettings/tokens`.
+2. Clic en **+ New Token** → Nombre: `qa-testcase-generator`.
+3. **Organization**: tu organización.
+4. **Scopes**: expande **Work Items** y marca **Read & Write**.
+5. **Expiration**: 30 o 90 días.
+6. Clic en **Create** → **copia el token** (solo se muestra una vez) y pégalo en `AZURE_DEVOPS_PAT` sin comillas ni espacios.
+
+Ejemplo de `.env` ya llenado:
+```
+AZURE_DEVOPS_ORG=miempresa
+AZURE_DEVOPS_PROJECT=Proyecto QA
+AZURE_DEVOPS_PAT=xy7abcdefghijklmnopqrstuvwxyz1234567890
+```
+
+Después de guardar, reinicia con `docker compose up -d --build`. Si el banner amarillo "MODO DEMO" desaparece, estás conectado a Azure real.
 
 ### 2. Levantar
 
