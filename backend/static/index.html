@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QA Test Case Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>QA Test Case Generator</h1>
+    <span id="status-chip" class="chip chip-neutral">conectando…</span>
+  </header>
+
+  <main>
+    <section class="card" id="card-form">
+      <div class="grid-form">
+        <label>
+          ID de la Historia de Usuario
+          <input type="number" id="work-item-id" min="1" placeholder="ej. 12345" required />
+        </label>
+        <label>
+          Cantidad de casos
+          <input type="number" id="quantity" min="1" max="50" value="5" />
+        </label>
+        <label class="full">
+          Instrucciones para el agente (opcional)
+          <textarea id="instructions" rows="2"
+            placeholder="ej. enfócate en casos negativos y de límite, prioriza críticos, incluye pruebas de seguridad…"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btn-generate" class="btn btn-primary">Generar casos de prueba</button>
+        <button id="btn-fetch-hu" class="btn btn-secondary">Solo ver la HU</button>
+      </div>
+      <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con el modelo local (Ollama).</p>
+    </section>
+
+    <section class="card hidden" id="card-hu">
+      <h2>Historia de Usuario</h2>
+      <pre id="hu-output" class="pre-box"></pre>
+    </section>
+
+    <section class="card hidden" id="card-results">
+      <div class="results-head">
+        <h2>Casos generados</h2>
+        <span id="summary" class="summary-text"></span>
+      </div>
+      <div id="cases-container"></div>
+      <div class="actions">
+        <button id="btn-add-case" class="btn btn-secondary">+ Agregar Test Case manual</button>
+        <button id="btn-create" class="btn btn-success">Crear en Azure DevOps (enlazados a la HU)</button>
+        <button id="btn-reset" class="btn btn-ghost">Limpiar</button>
+      </div>
+      <p id="create-result" class="hint"></p>
+    </section>
+  </main>
+
+  <div id="loader" class="hidden">
+    <div class="spinner"></div>
+    <p>Generando con el modelo local… puede tardar unos minutos</p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

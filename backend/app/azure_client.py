@@ -1,0 +1,108 @@
+import base64
+from typing import Any, Dict
+
+import httpx
+
+from .config import settings
+
+
+class AzureDevOpsError(Exception):
+    pass
+
+
+class AzureDevOpsClient:
+    def __init__(self) -> None:
+        self._base = settings.api_base
+        self._project = settings.azure_devops_project
+        token = f":{settings.azure_devops_pat}".encode()
+        self._auth = {
+            "Authorization": "Basic " + base64.b64encode(token).decode()
+        }
+
+    def _url(self, path: str) -> str:
+        return f"{self._base}/{self._project}/_apis{path}"
+
+    def _get(self, path: str, params: Dict[str, Any]) -> httpx.Response:
+        resp = httpx.get(
+            self._url(path),
+            params=params,
+            headers=self._auth,
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise AzureDevOpsError(
+                f"Azure DevOps GET {path} -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        return resp
+
+    def get_work_item(self, work_item_id: int) -> Dict[str, Any]:
+        resp = self._get(
+            f"/wit/workitems/{work_item_id}",
+            {
+                "api-version": "7.1",
+                "$expand": "Relations",
+            },
+        )
+        data = resp.json()
+        fields = data.get("fields", {})
+        return {
+            "id": data.get("id"),
+            "type": fields.get("System.WorkItemType"),
+            "title": fields.get("System.Title"),
+            "description": fields.get("System.Description"),
+            "acceptance_criteria": fields.get("Microsoft.VSTS.Common.AcceptanceCriteria"),
+            "state": fields.get("System.State"),
+            "created_by": fields.get("System.CreatedBy", {}).get("displayName"),
+        }
+
+    def get_work_item_url(self, work_item_id: int) -> str:
+        return f"https://dev.azure.com/{settings.azure_devops_org}/{self._project}/_apis/wit/workItems/{work_item_id}"
+
+    def create_test_case(
+        self,
+        title: str,
+        description: str,
+        steps_html: str,
+        user_story_id: int,
+    ) -> Dict[str, Any]:
+        fields: Dict[str, Any] = {
+            "/fields/System.Title": title,
+        }
+        if description:
+            fields["/fields/System.Description"] = description
+        if steps_html:
+            fields["/fields/Microsoft.VSTS.TCM.Steps"] = steps_html
+
+        patch = [{"op": "add", "path": path, "value": value} for path, value in fields.items()]
+        patch.append(
+            {
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                    "rel": "Microsoft.VSTS.Common.Tests",
+                    "url": self.get_work_item_url(user_story_id),
+                },
+            }
+        )
+
+        resp = httpx.post(
+            self._url(f"/wit/workitems/$Test Case"),
+            params={"api-version": "7.1"},
+            headers={**self._auth, "Content-Type": "application/json-patch+json"},
+            json=patch,
+            timeout=30.0,
+        )
+        if resp.status_code not in (200, 201):
+            raise AzureDevOpsError(
+                f"Azure DevOps create Test Case -> HTTP {resp.status_code}: {resp.text[:500]}"
+            )
+
+        data = resp.json()
+        return {
+            "id": data.get("id"),
+            "url": data.get("url"),
+            "title": data.get("fields", {}).get("System.Title"),
+        }
+
+
+azure_client = AzureDevOpsClient()
