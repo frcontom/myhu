@@ -36,10 +36,22 @@ app.js ──POST /api/create──► main.create()
 
 | Método | Ruta | Body | Respuesta |
 |--------|------|------|-----------|
-| GET | `/api/health` | — | `{status, model, azure_configured, ollama_url}` |
+| GET | `/api/health` | — | `{status, model, azure_configured, demo_mode, ollama_url}` |
 | GET | `/api/hu/{id}` | — | HU normalizada `{id, type, title, description, acceptance_criteria, state, created_by}` |
-| POST | `/api/generate` | `{work_item_id, quantity(1-50), instructions}` | `{work_item, summary, test_cases[]}` |
+| POST | `/api/generate` | `{work_item_id, quantity(1-50), instructions}` | `{work_item, summary, test_cases[]}` (bloqueante) |
+| GET | `/api/generate-stream` | query params | **SSE**: `start` → `progress*` → `done` / `error` |
 | POST | `/api/create` | `{work_item_id, test_cases[]}` | `{created[], count, linked_to_work_item}` (o `{created, error}` si falla a mitad) |
+
+### Streaming SSE (`/api/generate-stream`)
+
+La generación usa `stream: True` de Ollama y se proxya al front como Server-Sent Events:
+
+- `event: start` → `{estimated_tokens}`
+- `event: progress` → `{tokens, elapsed, tokens_per_sec, percent, estimated}` (aprox. cada 0.25 s)
+- `event: done` → `{summary, test_cases[], work_item}` (incluye la HU resuelta)
+- `event: error` → `{detail}`
+
+El front consume con `EventSource` y pinta la barra de progreso en vivo (`app.js:generate`). La estimación de `percent` usa `AVG_TOKENS_PER_CASE=400` en `llm_client.py`.
 
 ### Formato de un test case (API + front)
 

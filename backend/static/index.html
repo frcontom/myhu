@@ -63,7 +63,9 @@
 
   <div id="loader" class="hidden">
     <div class="spinner"></div>
-    <p>Generando con el modelo local… puede tardar unos minutos</p>
+    <p id="loader-text">Generando con el modelo local… puede tardar unos minutos</p>
+    <div class="progress-track"><div id="progress-bar" class="progress-fill" style="width:0%"></div></div>
+    <p id="loader-stats" class="loader-stats"></p>
   </div>
 
   <script src="app.js"></script>

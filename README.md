@@ -74,6 +74,15 @@ Si no configuras `AZURE_DEVOPS_*` en el `.env`, el sistema entra en **modo demo*
 
 Es ideal para probar la herramienta antes de tener el PAT o para hacer demos.
 
+## Velocidad y barra de progreso
+
+- La generación es **lenta a propósito**: el modelo corre en CPU (sin GPU) y genera texto token a token. Un caso con varios pasos puede tardar ~30-60 s; 5 casos ~2-5 min.
+- Mientras genera, el front muestra una **barra de progreso en vivo** con tokens generados, velocidad (tokens/s) y tiempo transcurrido (streaming vía SSE).
+- **Consejos para acelerar** (editar `.env` y `docker compose up -d`):
+  - Cambiar `OLLAMA_MODEL=qwen2.5:3b-instruct` → ~2-3x más rápido (algo menos calidad). El 7b es el recomendado por calidad.
+  - Pedir menos casos por petición (los casos se pueden seguir agregando manualmente en el editor).
+  - El modelo queda cargado en RAM tras la primera generación (keep-alive 30 min), así que las siguientes son más rápidas.
+
 ## Endpoints
 
 | Método | Ruta | Descripción |

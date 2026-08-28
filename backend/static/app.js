@@ -17,8 +17,14 @@ async function api(path, options = {}) {
   return data;
 }
 
-function setLoading(on) {
+function setLoading(on, text) {
   $("loader").classList.toggle("hidden", !on);
+  if (on && text) $("loader-text").textContent = text;
+}
+
+function setProgress(percent, statsText) {
+  $("progress-bar").style.width = Math.min(100, Math.max(0, percent)) + "%";
+  if (statsText) $("loader-stats").textContent = statsText;
 }
 
 function setChip(kind, text) {
@@ -156,31 +162,52 @@ async function generate() {
   const workItemId = $("work-item-id").value.trim();
   if (!workItemId) { alert("Ingresa el ID de la HU"); return; }
 
-  const payload = {
-    work_item_id: Number(workItemId),
-    quantity: Number($("quantity").value) || 5,
-    instructions: $("instructions").value.trim(),
-  };
+  const quantity = Number($("quantity").value) || 5;
+  const instructions = $("instructions").value.trim();
+  const url = `/api/generate-stream?work_item_id=${workItemId}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
 
-  setLoading(true);
-  try {
-    const data = await api("/api/generate", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    state.workItem = data.work_item;
-    state.testCases = data.test_cases;
+  setLoading(true, "Generando con el modelo local… puede tardar unos minutos");
+  setProgress(2, "Conectando con Ollama…");
+
+  const es = new EventSource(url);
+
+  es.addEventListener("start", (e) => {
+    const d = JSON.parse(e.data);
+    setProgress(3, `Preparando modelo (est. ${d.estimated_tokens} tokens)…`);
+  });
+
+  es.addEventListener("progress", (e) => {
+    const d = JSON.parse(e.data);
+    setProgress(
+      d.percent,
+      `Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
+    );
+  });
+
+  es.addEventListener("done", (e) => {
+    const d = JSON.parse(e.data);
+    es.close();
+    setProgress(100, "Completado");
+    setLoading(false);
+    state.workItem = d.work_item || state.workItem;
+    state.testCases = d.test_cases;
     showHu(state.workItem);
-    $("summary").textContent = data.summary || "";
+    $("summary").textContent = d.summary || "";
     renderCases(state.testCases);
     $("card-results").classList.remove("hidden");
     setChip("chip-ok", "conectado");
-  } catch (err) {
-    setChip("chip-err", "error");
-    alert(err.message);
-  } finally {
+  });
+
+  es.addEventListener("error", (e) => {
+    es.close();
     setLoading(false);
-  }
+    setChip("chip-err", "error");
+    if (e.data) {
+      try { alert(JSON.parse(e.data).detail); } catch { alert("Error al generar"); }
+    } else {
+      alert("No se pudo conectar con el servidor de generación.");
+    }
+  });
 }
 
 async function fetchHu() {

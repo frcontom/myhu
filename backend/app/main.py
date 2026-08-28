@@ -1,8 +1,9 @@
+import json
 import os
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,7 @@ from .llm_client import (
     TestCaseGenerationError,
     generate_test_cases,
     steps_to_tcm_html,
+    stream_test_cases,
 )
 
 app = FastAPI(title="QA Test Case Generator", version="1.0.0")
@@ -61,6 +63,41 @@ def get_hu(work_item_id: int) -> dict:
         return azure_client.get_work_item(work_item_id)
     except AzureDevOpsError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.get("/api/generate-stream")
+def generate_stream(
+    work_item_id: int,
+    quantity: int = 5,
+    instructions: str = "",
+):
+    quantity = max(1, min(quantity, 50))
+
+    def event_stream():
+        if settings.demo_mode:
+            work_item = sample_work_item(work_item_id)
+        else:
+            if not settings.is_configured:
+                yield _sse("error", {"detail": "Configura AZURE_DEVOPS_* en el archivo .env"})
+                return
+            try:
+                work_item = azure_client.get_work_item(work_item_id)
+            except AzureDevOpsError as exc:
+                yield _sse("error", {"detail": str(exc)})
+                return
+        try:
+            for ev in stream_test_cases(work_item, quantity, instructions):
+                if ev["type"] == "done":
+                    ev["data"]["work_item"] = work_item
+                yield _sse(ev["type"], ev["data"])
+        except Exception as exc:
+            yield _sse("error", {"detail": f"Error interno: {exc}"})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/generate")

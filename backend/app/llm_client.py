@@ -1,10 +1,13 @@
 import json
 import re
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
 from .config import settings
+
+AVG_TOKENS_PER_CASE = 400
 
 
 class LLMError(Exception):
@@ -67,47 +70,122 @@ def generate_test_cases(
     quantity: int,
     instructions: str,
 ) -> Dict[str, Any]:
+    events = list(stream_test_cases(work_item, quantity, instructions))
+    done = next((ev["data"] for ev in events if ev["type"] == "done"), None)
+    if done is None:
+        error = next((ev["data"].get("detail") for ev in events if ev["type"] == "error"), None)
+        raise TestCaseGenerationError(error or "No se generaron casos de prueba.")
+    return done
+
+
+def stream_test_cases(
+    work_item: Dict[str, Any],
+    quantity: int,
+    instructions: str,
+) -> Iterator[Dict[str, Any]]:
     prompt = build_prompt(work_item, quantity, instructions)
+    estimated = min(quantity * AVG_TOKENS_PER_CASE, settings.ollama_max_tokens)
+    yield {"type": "start", "data": {"estimated_tokens": estimated}}
 
     payload = {
         "model": settings.ollama_model,
         "prompt": prompt,
-        "stream": False,
+        "stream": True,
         "format": "json",
+        "keep_alive": "30m",
         "options": {
             "temperature": settings.ollama_temperature,
             "num_predict": settings.ollama_max_tokens,
         },
     }
 
+    buf = ""
+    token_count = 0
+    start = time.time()
+    last_yield = 0.0
+
     try:
-        resp = httpx.post(
+        with httpx.stream(
+            "POST",
             f"{settings.ollama_url}/api/generate",
             json=payload,
             timeout=600.0,
-        )
-    except httpx.HTTPError as exc:
-        raise LLMError(f"No se pudo conectar con Ollama ({settings.ollama_url}): {exc}") from exc
+        ) as resp:
+            if resp.status_code != 200:
+                yield {
+                    "type": "error",
+                    "data": {"detail": f"Ollama respondió HTTP {resp.status_code}"},
+                }
+                return
 
-    if resp.status_code != 200:
-        raise LLMError(f"Ollama respondió HTTP {resp.status_code}: {resp.text[:300]}")
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                token = chunk.get("response", "")
+                buf += token
+                token_count += 1
+
+                if chunk.get("done"):
+                    break
+
+                now = time.time()
+                if now - last_yield >= 0.25:
+                    last_yield = now
+                    elapsed = now - start
+                    tps = round(token_count / elapsed, 1) if elapsed > 0 else 0.0
+                    percent = min(int(token_count / estimated * 100), 99)
+                    yield {
+                        "type": "progress",
+                        "data": {
+                            "tokens": token_count,
+                            "elapsed": round(elapsed, 1),
+                            "tokens_per_sec": tps,
+                            "percent": percent,
+                            "estimated": estimated,
+                        },
+                    }
+    except httpx.HTTPError as exc:
+        yield {
+            "type": "error",
+            "data": {"detail": f"No se pudo conectar con Ollama ({settings.ollama_url}): {exc}"},
+        }
+        return
 
     try:
-        text = resp.json().get("response", "")
-        data = _parse_json(text)
+        data = _parse_json(buf)
     except Exception as exc:
-        raise TestCaseGenerationError(f"No se pudo interpretar la respuesta del modelo: {exc}") from exc
+        yield {
+            "type": "error",
+            "data": {"detail": f"No se pudo interpretar la respuesta del modelo: {exc}"},
+        }
+        return
 
     if not isinstance(data, dict):
-        raise TestCaseGenerationError("La respuesta del modelo no es un objeto JSON.")
+        yield {
+            "type": "error",
+            "data": {"detail": "La respuesta del modelo no es un objeto JSON."},
+        }
+        return
 
     cases = data.get("test_cases") or []
     if not isinstance(cases, list) or len(cases) == 0:
-        raise TestCaseGenerationError("El modelo no generó casos de prueba.")
+        yield {
+            "type": "error",
+            "data": {"detail": "El modelo no generó casos de prueba."},
+        }
+        return
 
-    return {
-        "summary": data.get("summary", ""),
-        "test_cases": [_normalize_case(c, i) for i, c in enumerate(cases, start=1)],
+    yield {
+        "type": "done",
+        "data": {
+            "summary": data.get("summary", ""),
+            "test_cases": [_normalize_case(c, i) for i, c in enumerate(cases, start=1)],
+        },
     }
 
 

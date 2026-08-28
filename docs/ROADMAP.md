@@ -12,6 +12,8 @@ Funcional de punta a punta:
 - [x] Tabla editable de casos (título, prioridad, tipo, precondiciones, pasos).
 - [x] Creación de `Test Case` en Azure DevOps enlazados a la HU (`POST /api/create`).
 - [x] **Modo demo**: funciona sin Azure DevOps (HU de ejemplo + creación simulada), con banner en el front.
+- [x] **Barra de progreso en vivo**: streaming SSE desde Ollama (tokens, velocidad, tiempo transcurrido).
+- [x] Prueba end-to-end en modo demo: `/api/generate-stream` con 2 casos ≈ 52 s (6.8 tokens/s) en CPU.
 - [x] Manejo de errores con `detail` legible (front usa `alert`).
 - [x] `docker-compose.yml` (backend + ollama), `.env.example`, README, AGENTS.md.
 
@@ -43,6 +45,7 @@ Funcional de punta a punta:
 ### Infra / DX
 - [ ] Script `run.ps1` que cree el `.env`, levante compose y abra el navegador.
 - [ ] Healthcheck de Ollama en el compose para que el backend arranque solo cuando el modelo esté listo.
+- [ ] Evaluar `qwen2.5:3b` como opción rápida (2-3x más veloz en CPU) si el QA prefiere velocidad sobre calidad.
 - [ ] Considerar modelos más grandes (`qwen2.5:14b`) solo si el usuario sube a 16 GB de RAM.
 
 ## Regla importante
