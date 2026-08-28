@@ -74,7 +74,7 @@ label {
   color: var(--muted);
 }
 
-input, textarea {
+input, textarea, select {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -84,9 +84,24 @@ input, textarea {
   font-family: inherit;
 }
 
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+select option {
+  background: var(--card);
+  color: var(--text);
 }
 
 textarea { resize: vertical; }
