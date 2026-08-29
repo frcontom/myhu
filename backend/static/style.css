@@ -167,6 +167,8 @@ textarea { resize: vertical; }
 .btn-secondary:hover { background: #475569; }
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { background: #059669; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
 .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
 

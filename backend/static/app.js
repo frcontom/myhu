@@ -7,6 +7,15 @@ let state = {
 };
 
 let dragState = null;
+let cancelRequested = false;
+let activeStream = null;
+
+function cancelGeneration() {
+  cancelRequested = true;
+  if (activeStream) activeStream.close();
+  setLoading(false);
+  setChip("chip-ok", "cancelado");
+}
 
 async function api(path, options = {}) {
   const resp = await fetch(path, {
@@ -359,6 +368,7 @@ async function generate() {
   const instructions = $("instructions").value.trim();
 
   state = { workItem: null, testCases: [], huMap: {} };
+  cancelRequested = false;
   $("card-hu").classList.add("hidden");
   $("card-results").classList.add("hidden");
   $("create-result").textContent = "";
@@ -369,8 +379,14 @@ async function generate() {
       ? `Generando HU #${id} (${i + 1}/${ids.length})… puede tardar unos minutos`
       : "Generando con el modelo local… puede tardar unos minutos");
     await streamOne(id, quantity, instructions);
+    if (cancelRequested) break;
   }
   setLoading(false);
+  if (cancelRequested) {
+    cancelRequested = false;
+    if (state.testCases.length) renderResults();
+    return;
+  }
 
   if (!state.testCases.length) {
     setChip("chip-err", "error");
@@ -384,6 +400,7 @@ function streamOne(id, quantity, instructions) {
   return new Promise((resolve) => {
     const url = `/api/generate-stream?work_item_id=${id}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
     const es = new EventSource(url);
+    activeStream = es;
 
     let warmSec = 0;
     const ticker = setInterval(() => {
@@ -409,8 +426,10 @@ function streamOne(id, quantity, instructions) {
 
     es.addEventListener("done", (e) => {
       clearInterval(ticker);
-      const d = JSON.parse(e.data);
       es.close();
+      if (activeStream === es) activeStream = null;
+      if (cancelRequested) { resolve(); return; }
+      const d = JSON.parse(e.data);
       const wi = d.work_item;
       state.workItem = wi;
       state.huMap[wi.id] = { title: wi.title, criteriaList: wi.criteria_list || [] };
@@ -425,6 +444,8 @@ function streamOne(id, quantity, instructions) {
     es.addEventListener("error", (e) => {
       clearInterval(ticker);
       es.close();
+      if (activeStream === es) activeStream = null;
+      if (cancelRequested) { resolve(); return; }
       let msg = "No se pudo conectar con el servidor de generación.";
       if (e.data) {
         try { msg = JSON.parse(e.data).detail; } catch { /* ignore */ }
@@ -822,6 +843,7 @@ function applyPreset(name) {
 }
 
 $("btn-generate").addEventListener("click", generate);
+$("btn-cancel-gen").addEventListener("click", cancelGeneration);
 $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-test-azure").addEventListener("click", testAzure);
 $("btn-add-case").addEventListener("click", addCaseManual);
