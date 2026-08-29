@@ -407,7 +407,7 @@ textarea { resize: vertical; }
 
 .step-head {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 24px 1fr 1fr auto;
   gap: 8px;
   margin: 12px 0 4px;
 }
@@ -422,10 +422,25 @@ textarea { resize: vertical; }
 
 .step-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 24px 1fr 1fr auto;
   gap: 8px;
   margin-bottom: 6px;
   align-items: center;
+}
+
+.step-grip {
+  color: var(--muted);
+  cursor: grab;
+  text-align: center;
+  font-size: 14px;
+  user-select: none;
+}
+
+.step-row.drag-source { opacity: 0.4; }
+.step-row.drag-over {
+  outline: 2px dashed var(--primary);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .step-input {

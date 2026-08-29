@@ -6,6 +6,8 @@ let state = {
   huMap: {},
 };
 
+let dragState = null;
+
 async function api(path, options = {}) {
   const resp = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -212,11 +214,13 @@ function renderCase(tc, idx) {
 
   const stepHead = document.createElement("div");
   stepHead.className = "step-head";
+  const shGrip = document.createElement("span");
   const shA = document.createElement("span");
   shA.textContent = "Acción";
   const shE = document.createElement("span");
   shE.textContent = "Resultado esperado";
-  stepHead.append(shA, shE, document.createElement("span"));
+  const shDel = document.createElement("span");
+  stepHead.append(shGrip, shA, shE, shDel);
   div.appendChild(stepHead);
 
   tc.steps.forEach((step, i) => div.appendChild(renderStep(tc, step, i)));
@@ -236,6 +240,45 @@ function renderCase(tc, idx) {
 function renderStep(tc, step, i) {
   const row = document.createElement("div");
   row.className = "step-row";
+  row.draggable = true;
+  row.dataset.index = i;
+
+  row.addEventListener("dragstart", (e) => {
+    dragState = { tc, from: i };
+    row.classList.add("drag-source");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(i));
+  });
+
+  row.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    row.classList.add("drag-over");
+  });
+
+  row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+
+  row.addEventListener("drop", (e) => {
+    e.preventDefault();
+    row.classList.remove("drag-over");
+    if (dragState && dragState.tc === tc && dragState.from !== i) {
+      const from = dragState.from;
+      const [moved] = tc.steps.splice(from, 1);
+      tc.steps.splice(i, 0, moved);
+      dragState = null;
+      renderCases(state.testCases);
+    }
+  });
+
+  row.addEventListener("dragend", () => {
+    row.classList.remove("drag-source");
+    dragState = null;
+  });
+
+  const grip = document.createElement("span");
+  grip.className = "step-grip";
+  grip.textContent = "⠿";
+  grip.title = "Arrastrar para reordenar";
 
   const action = document.createElement("input");
   action.className = "step-input";
@@ -257,7 +300,7 @@ function renderStep(tc, step, i) {
     renderCases(state.testCases);
   });
 
-  row.append(action, expected, del);
+  row.append(grip, action, expected, del);
   return row;
 }
 
