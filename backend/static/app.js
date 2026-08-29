@@ -656,8 +656,29 @@ function buildExportMd(promptText, quantity) {
   lines.push(promptText || PLANTILLA_GPT);
   lines.push("");
   lines.push("# JSON PARA REIMPORTAR (responde aquí el JSON con los casos mejorados)");
+  if (!state.testCases.length) {
+    lines.push("> NOTA: no hay casos locales. Reemplaza este JSON de EJEMPLO con los casos en EXACTAMENTE esta estructura (array de objetos).");
+  }
   lines.push("```json");
-  lines.push(JSON.stringify(state.testCases, null, 2));
+  if (state.testCases.length) {
+    lines.push(JSON.stringify(state.testCases, null, 2));
+  } else {
+    const huId = (state.workItem && state.workItem.id) || 0;
+    const exampleCase = {
+      title: "Título descriptivo del caso (sin prefijos TC)",
+      description: "Descripción clara y profesional del caso.",
+      priority: 1,
+      type: "funcional",
+      preconditions: "Precondiciones específicas y verificables.",
+      criterios: [1],
+      steps: [
+        { action: "Acción del paso 1", expected: "Resultado esperado del paso 1" },
+        { action: "Acción del paso 2", expected: "Resultado esperado del paso 2" }
+      ],
+      work_item_id: huId,
+    };
+    lines.push(JSON.stringify([exampleCase], null, 2));
+  }
   lines.push("```");
   return lines.join("\n");
 }
