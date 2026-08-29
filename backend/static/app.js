@@ -77,6 +77,10 @@ function renderCoverage() {
   if (!hurs.length) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
 
+  let totalCrit = 0;
+  let totalCovered = 0;
+  const missingByHu = {};
+
   hurs.forEach(([huId, hu]) => {
     const cases = state.testCases.filter((c) => c.work_item_id === Number(huId));
     const block = document.createElement("div");
@@ -85,9 +89,16 @@ function renderCoverage() {
     head.textContent = `Cobertura HU #${huId} — ${hu.title}`;
     block.appendChild(head);
 
+    const missing = [];
     (hu.criteriaList || []).forEach((crit, idx) => {
       const n = idx + 1;
       const covering = cases.filter((c) => (c.criterios || []).includes(n)).length;
+      totalCrit += 1;
+      if (covering > 0) {
+        totalCovered += 1;
+      } else {
+        missing.push({ n, crit });
+      }
       const row = document.createElement("div");
       row.className = covering > 0 ? "cov-covered" : "cov-missing";
       row.textContent = `${covering > 0 ? "✔" : "✖"} ${n}. ${crit}  —  ${covering} caso${covering === 1 ? "" : "s"}`;
@@ -100,14 +111,50 @@ function renderCoverage() {
       row.textContent = "(esta HU no tiene criterios de aceptación definidos)";
       block.appendChild(row);
     }
+    missingByHu[huId] = missing;
     box.appendChild(block);
   });
+
+  const pct = totalCrit ? Math.round((totalCovered / totalCrit) * 100) : 0;
+  const summary = document.createElement("div");
+  summary.className = "coverage-summary";
+  summary.innerHTML = `Cobertura: <b>${totalCovered}/${totalCrit}</b> criterios (${pct}%)`;
+  box.insertBefore(summary, box.firstChild);
+
+  const hasMissing = Object.values(missingByHu).some((a) => a.length);
+  if (hasMissing) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-secondary";
+    btn.textContent = "Completar cobertura (generar casos de los criterios sin cubrir)";
+    btn.addEventListener("click", () => completeCoverage(missingByHu));
+    box.appendChild(btn);
+  }
+}
+
+async function completeCoverage(missingByHu) {
+  for (const [huId, missing] of Object.entries(missingByHu)) {
+    if (!missing.length) continue;
+    const desc = missing.map((m) => `Criterio ${m.n}: "${m.crit}"`).join(" | ");
+    const quantity = Math.min(missing.length, 7);
+    setLoading(true, `Completando cobertura HU #${huId}… puede tardar unos minutos`);
+    await streamOne(
+      huId,
+      quantity,
+      `Genera casos de prueba ÚNICAMENTE para los criterios de aceptación SIN COBERTURA. ` +
+      `Cada caso debe cubrir uno o más de estos criterios y reflejarlo en su campo "criterios". ` +
+      `Criterios pendientes: ${desc}`
+    );
+    setLoading(false);
+  }
+  renderResults();
+  alert("Cobertura completada. Revisa los nuevos casos generados en el editor.");
 }
 
 function renderCases(cases) {
   const container = $("cases-container");
   container.innerHTML = "";
   cases.forEach((tc, idx) => container.appendChild(renderCase(tc, idx)));
+  saveState();
 }
 
 function fieldLabel(text) {
@@ -388,12 +435,39 @@ function streamOne(id, quantity, instructions) {
   });
 }
 
+function saveState() {
+  try {
+    localStorage.setItem("qa-state", JSON.stringify({
+      workItem: state.workItem,
+      testCases: state.testCases,
+      huMap: state.huMap,
+    }));
+  } catch { /* almacenamiento lleno o no disponible */ }
+}
+
+function restoreState() {
+  try {
+    const raw = localStorage.getItem("qa-state");
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && Array.isArray(data.testCases) && data.testCases.length) {
+      state = {
+        workItem: data.workItem || null,
+        testCases: data.testCases,
+        huMap: data.huMap || {},
+      };
+      renderResults();
+    }
+  } catch { /* estado inválido */ }
+}
+
 function renderResults() {
   showHu(state.workItem);
   $("summary").textContent = state.testCases.length + " casos en " + Object.keys(state.huMap).length + " HU";
   renderCoverage();
   renderCases(state.testCases);
   $("card-results").classList.remove("hidden");
+  saveState();
 }
 
 async function fetchHu() {
@@ -717,6 +791,7 @@ function reset() {
   $("card-results").classList.add("hidden");
   $("create-result").textContent = "";
   $("summary").textContent = "";
+  try { localStorage.removeItem("qa-state"); } catch { /* ignore */ }
 }
 
 const PRESETS = {
@@ -753,4 +828,5 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
   } catch {
     setChip("chip-err", "sin conexión");
   }
+  restoreState();
 })();

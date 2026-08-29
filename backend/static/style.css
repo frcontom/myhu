@@ -348,6 +348,19 @@ textarea { resize: vertical; }
   margin-bottom: 16px;
 }
 
+.coverage-summary {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.coverage-summary b { color: var(--primary); }
+
+.coverage .btn { align-self: flex-start; }
+
 .coverage-hu {
   background: var(--bg);
   border: 1px solid var(--border);
