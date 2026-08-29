@@ -345,6 +345,13 @@ def _parse_json(text: str) -> Any:
         raise ValueError("JSON no encontrado en la respuesta")
 
 
+def _to_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _normalize_case(raw: Any, index: int) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         raw = {"title": f"TC-{index:03d}"}
@@ -371,7 +378,7 @@ def _normalize_case(raw: Any, index: int) -> Dict[str, Any]:
     return {
         "title": title,
         "description": str(raw.get("description") or ""),
-        "priority": int(raw.get("priority") or 2),
+        "priority": _to_int(raw.get("priority"), 2),
         "type": str(raw.get("type") or "funcional"),
         "preconditions": str(raw.get("preconditions") or ""),
         "criterios": criterios,
