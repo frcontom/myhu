@@ -120,3 +120,4 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual: el front exp
 3. No introducir frameworks frontend ni bases de datos sin confirmar con el usuario (la premisa es "rápido y fácil de montar").
 4. Si tocas `steps_to_tcm_html` o el formato de relaciones, probar contra Azure DevOps real o documentar el cambio.
 5. Los cambios deben mantener el flujo actual: leer HU → generar con LLM local → revisar → crear en Azure.
+6. **NUNCA crear ni borrar work items en Azure DevOps real sin permiso explícito del usuario.** No crear elementos temporales de prueba en su organización. Si por necesidad se crea algo (o se detecta que se creó), informarlo al usuario para que lo limpie él mismo; no intentar borrar vía API (Azure además bloquea el borrado de Test Case por la API de WIT).
