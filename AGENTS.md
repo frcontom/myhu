@@ -81,7 +81,7 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual: el front exp
 
 - **`azure_client.py:23`**: auth Basic con usuario vacío → `base64(":PAT")`. Formato obligatorio.
 - **`azure_client.py:86`**: la URL del work item es `/_apis/wit/workItems/{id}` y el POST va a `/wit/workitems/$Test Case` (con `$` URL-encoded). El `$` en la ruta debe escribirse `$Test Case`; httpx lo codifica.
-- **`azure_client.py:79`**: la relación usa `rel: "System.LinkTypes.Related"`. ⚠️ Los tipos de prueba `Microsoft.VSTS.Common.Tests`/`TestedBy` NO existen en todas las organizaciones (validado: dan 400 "Unknown relation type" en la org del usuario). `Related` siempre funciona; el caso queda visible en la pestaña "Related Work" de la HU (no en "Tested by", que requiere que la org tenga los tipos de enlace de pruebas).
+- **`azure_client.py:79`**: la relación usa `rel: "Microsoft.VSTS.Common.TestedBy-Reverse"`. ⚠️ Es el nombre **direccional** que Azure acepta para el enlace "Tests"/"Tested by" (el caso queda en la pestaña "Tested by" de la HU). Los nombres base `Microsoft.VSTS.Common.Tests` / `Microsoft.VSTS.Common.TestedBy` dan 400 "Unknown relation type"; `System.LinkTypes.Related` siempre funciona pero no es "Tested by".
 - **`llm_client.py`**: `format="json"` en Ollama fuerza JSON, pero igual se normaliza con `_parse_json` y `_normalize_case`. Nunca confiar en que el modelo devuelva JSON perfecto.
 - **`llm_client.py:147` `steps_to_tcm_html`**: el formato HTML de pasos de Azure DevOps es `id` par/impar (Action + ExpectedResult), `last="{len(steps)*2}"`, y hay que escapar HTML (`_escape_html`).
 - **`main.py:108`**: `StaticFiles(html=True)` montado en `/`; las rutas `/api/*` se registran ANTES para que el mount no las intercepte.

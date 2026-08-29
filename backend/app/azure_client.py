@@ -312,7 +312,7 @@ class AzureDevOpsClient:
                 "op": "add",
                 "path": "/relations/-",
                 "value": {
-                    "rel": "System.LinkTypes.Related",
+                    "rel": "Microsoft.VSTS.Common.TestedBy-Reverse",
                     "url": self.get_work_item_url(user_story_id),
                 },
             }

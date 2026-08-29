@@ -173,7 +173,7 @@ def create(req: CreateRequest) -> dict:
             return {"created": created, "error": str(exc)}
 
     publish = None
-    if created:
+    if created and settings.azure_devops_test_plan_id:
         try:
             plan = azure_client.get_or_create_test_plan("QA Test Case Generator")
             suite = azure_client.get_root_suite(plan["id"])
