@@ -156,9 +156,14 @@ def create(req: CreateRequest) -> dict:
 
     created = []
     for tc in req.test_cases:
-        steps_html = steps_to_tcm_html(
-            [{"action": s.get("action", ""), "expected": s.get("expected", "")} for s in tc.steps]
+        steps = []
+        if tc.preconditions:
+            steps.append({"action": "Precondiciones", "expected": tc.preconditions})
+        steps.extend(
+            {"action": s.get("action", ""), "expected": s.get("expected", "")}
+            for s in tc.steps
         )
+        steps_html = steps_to_tcm_html(steps)
         try:
             item = azure_client.create_test_case(
                 title=tc.title,

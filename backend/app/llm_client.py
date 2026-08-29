@@ -124,7 +124,7 @@ Tipo: {work_item.get('type')}
   "summary": "resumen breve del enfoque de pruebas",
   "test_cases": [
     {{
-      "title": "TC-001: título descriptivo",
+      "title": "título descriptivo SIN prefijos TC-XXX",
       "description": "descripción breve del caso",
       "priority": 1,
       "type": "funcional|regresion|integracion|usabilidad|rendimiento|seguridad",
@@ -138,7 +138,8 @@ Tipo: {work_item.get('type')}
 }}
 3. Cada caso debe tener al menos {min_steps} pasos y cada paso debe tener action y expected.
 4. "criterios" es la lista de índices (empezando en 1) de los Criterios de Aceptación que ese caso cubre; puede ser vacía [].
-5. Los casos deben ser variados: feliz, negativos, límites, edge cases.
+5. El campo "title" NO debe llevar prefijos como "TC-001:" ni numeración; solo un título descriptivo.
+6. Los casos deben ser variados: feliz, negativos, límites, edge cases.
 """.strip()
 
 
@@ -363,8 +364,12 @@ def _normalize_case(raw: Any, index: int) -> Dict[str, Any]:
             criterios.append(int(raw_c))
         except (TypeError, ValueError):
             pass
+    title = str(raw.get("title") or "").strip()
+    title = re.sub(r"^\s*TC-\d+\s*[:.\-–]?\s*", "", title, flags=re.IGNORECASE).strip()
+    if not title:
+        title = f"Caso de prueba {index:03d}"
     return {
-        "title": str(raw.get("title") or f"TC-{index:03d}"),
+        "title": title,
         "description": str(raw.get("description") or ""),
         "priority": int(raw.get("priority") or 2),
         "type": str(raw.get("type") or "funcional"),
