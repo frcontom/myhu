@@ -91,6 +91,7 @@ def sample_work_item(work_item_id: int) -> Dict[str, Any]:
         ),
         "acceptance_criteria": acceptance_criteria,
         "criteria_list": parse_criteria(acceptance_criteria),
+        "justification": "Garantizar que ningún formulario digitalizado se pierda por fallas del OCR/ICR.",
         "state": "New",
         "created_by": "Modo DEMO (sin Azure DevOps)",
     }
@@ -133,6 +134,10 @@ class AzureDevOpsClient:
         fields = data.get("fields", {})
         description = html_to_text(fields.get("System.Description"))
         acceptance_criteria = html_to_text(fields.get("Microsoft.VSTS.Common.AcceptanceCriteria"))
+        justification = html_to_text(
+            fields.get("Microsoft.VSTS.CMMI.Justification")
+            or fields.get("Microsoft.VSTS.Common.BusinessValue")
+        )
         return {
             "id": data.get("id"),
             "type": fields.get("System.WorkItemType"),
@@ -140,6 +145,7 @@ class AzureDevOpsClient:
             "description": description,
             "acceptance_criteria": acceptance_criteria,
             "criteria_list": parse_criteria(acceptance_criteria),
+            "justification": justification,
             "state": fields.get("System.State"),
             "created_by": fields.get("System.CreatedBy", {}).get("displayName"),
         }

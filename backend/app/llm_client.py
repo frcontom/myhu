@@ -103,6 +103,9 @@ Tipo: {work_item.get('type')}
 ### Descripción
 {work_item.get('description') or '(sin descripción)'}
 
+### Justificación
+{work_item.get('justification') or '(sin justificación)'}
+
 ### Criterios de Aceptación
 {criteria_block}
 
