@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     azure_devops_org: str = ""
     azure_devops_project: str = ""
     azure_devops_pat: str = ""
+    azure_devops_url: str = ""
 
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:14b-instruct"
@@ -17,6 +18,8 @@ class Settings(BaseSettings):
 
     @property
     def api_base(self) -> str:
+        if self.azure_devops_url:
+            return self.azure_devops_url.rstrip("/")
         return f"https://dev.azure.com/{self.azure_devops_org}"
 
     @property

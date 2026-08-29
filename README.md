@@ -71,8 +71,11 @@ Edita `.env` con el Bloc de notas y reemplaza **solo los valores** (nunca borres
 AZURE_DEVOPS_ORG=qa-corp
 AZURE_DEVOPS_PROJECT=Proyecto QA
 AZURE_DEVOPS_PAT=xr6abcdefghijklmnopqrstuvwxyz1234567890
+# AZURE_DEVOPS_URL=https://qa-corp.visualstudio.com   ← solo si tu org es *.visualstudio.com
 OLLAMA_MODEL=qwen2.5:7b-instruct
 ```
+
+> **Dominio legacy `*.visualstudio.com`:** si tu URL es `https://tuorg.visualstudio.com/proyecto` (en vez de `dev.azure.com/tuorg`), agrega `AZURE_DEVOPS_URL=https://tuorg.visualstudio.com`. Si no, déjala vacía.
 
 ---
 

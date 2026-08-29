@@ -91,7 +91,7 @@ class AzureDevOpsClient:
         }
 
     def get_work_item_url(self, work_item_id: int) -> str:
-        return f"https://dev.azure.com/{settings.azure_devops_org}/{self._project}/_apis/wit/workItems/{work_item_id}"
+        return f"{settings.api_base}/{self._project}/_apis/wit/workItems/{work_item_id}"
 
     def test_connection(self) -> Dict[str, Any]:
         report = {
