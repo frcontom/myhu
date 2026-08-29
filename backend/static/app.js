@@ -631,22 +631,26 @@ function buildExportMd(promptText, quantity) {
   lines.push("- Mejorar los casos locales y añadir los que falten.");
   lines.push("");
   lines.push("# CASOS DE PRUEBA");
-  state.testCases.forEach((tc, i) => {
-    const huId = tc.work_item_id || (state.workItem && state.workItem.id);
-    lines.push(`## Caso ${i + 1}`);
-    lines.push(`- HU origen: #${huId} ${flatten(huTitleFor(huId))}`);
-    lines.push(`- Título: ${flatten(tc.title)}`);
-    lines.push(`- Descripción: ${flatten(tc.description)}`);
-    lines.push(`- Prioridad: ${tc.priority}`);
-    lines.push(`- Tipo: ${flatten(tc.type)}`);
-    lines.push(`- Precondiciones: ${flatten(tc.preconditions)}`);
-    lines.push(`- Criterios que cubre: ${(tc.criterios || []).join(", ")}`);
-    lines.push("- Pasos:");
-    (tc.steps || []).forEach((s, j) => {
-      lines.push(`    ${j + 1}. ${flatten(s.action)} -> ${flatten(s.expected)}`);
+  if (!state.testCases.length) {
+    lines.push("(no hay casos generados localmente — ChatGPT debe GENERAR todos los casos desde cero)");
+  } else {
+    state.testCases.forEach((tc, i) => {
+      const huId = tc.work_item_id || (state.workItem && state.workItem.id);
+      lines.push(`## Caso ${i + 1}`);
+      lines.push(`- HU origen: #${huId} ${flatten(huTitleFor(huId))}`);
+      lines.push(`- Título: ${flatten(tc.title)}`);
+      lines.push(`- Descripción: ${flatten(tc.description)}`);
+      lines.push(`- Prioridad: ${tc.priority}`);
+      lines.push(`- Tipo: ${flatten(tc.type)}`);
+      lines.push(`- Precondiciones: ${flatten(tc.preconditions)}`);
+      lines.push(`- Criterios que cubre: ${(tc.criterios || []).join(", ")}`);
+      lines.push("- Pasos:");
+      (tc.steps || []).forEach((s, j) => {
+        lines.push(`    ${j + 1}. ${flatten(s.action)} -> ${flatten(s.expected)}`);
+      });
+      lines.push("");
     });
-    lines.push("");
-  });
+  }
   lines.push("---");
   lines.push("# INSTRUCCIONES PARA EL MODELO");
   lines.push(promptText || PLANTILLA_GPT);
@@ -658,8 +662,25 @@ function buildExportMd(promptText, quantity) {
   return lines.join("\n");
 }
 
-function exportToGpt() {
-  if (!state.testCases.length) { alert("Primero genera casos"); return; }
+async function exportToGpt() {
+  const rawId = $("work-item-id").value.trim();
+  if (!state.workItem && rawId) {
+    setLoading(true, "Cargando la HU para exportar…");
+    try {
+      const data = await api(`/api/hu/${rawId}`);
+      state.workItem = data;
+      state.huMap[data.id] = { title: data.title, criteriaList: data.criteria_list || [] };
+    } catch (err) {
+      setLoading(false);
+      alert("No se pudo cargar la HU: " + err.message);
+      return;
+    }
+    setLoading(false);
+  }
+  if (!state.workItem) {
+    alert("Carga una HU primero (escribe el ID y clic en 'Solo ver la HU'), o genera casos.");
+    return;
+  }
   $("gpt-quantity").value = state.testCases.length || Number($("quantity").value) || 5;
   $("gpt-prompt").value = PLANTILLA_GPT;
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{CANTIDAD}}", $("gpt-quantity").value);
@@ -670,6 +691,12 @@ function downloadGptFile() {
   let quantity = Number($("gpt-quantity").value) || 5;
   let prompt = $("gpt-prompt").value.trim();
   if (!prompt) prompt = PLANTILLA_GPT;
+  if (!state.testCases.length) {
+    prompt = prompt.replace(
+      "MEJORA/AÑADE los que hagan falta para alcanzar en total",
+      "GENERA desde cero"
+    );
+  }
   prompt = prompt.replace(/{{CANTIDAD}}/g, String(quantity));
   const md = buildExportMd(prompt, quantity);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
