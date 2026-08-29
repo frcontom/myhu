@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
   <header class="topbar">
@@ -89,6 +89,24 @@
     <p id="loader-stats" class="loader-stats"></p>
   </div>
 
-  <script src="app.js?v=17"></script>
+  <div id="gpt-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>Pasar a ChatGPT</h2>
+      <p class="hint">
+        ChatGPT analizará la HU y los casos generados localmente, y devolverá el archivo mejorado
+        para que lo re-importes. Ajusta la cantidad y el prompt si quieres.
+      </p>
+      <label class="field-label" for="gpt-quantity">Cantidad total de casos de prueba que quieres</label>
+      <input type="number" id="gpt-quantity" min="1" max="20" value="5" />
+      <label class="field-label" for="gpt-prompt">Prompt para ChatGPT (editable)</label>
+      <textarea id="gpt-prompt" rows="14" spellcheck="false"></textarea>
+      <div class="actions">
+        <button id="btn-gpt-ok" class="btn btn-primary">Descargar y copiar</button>
+        <button id="btn-gpt-cancel" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=18"></script>
 </body>
 </html>

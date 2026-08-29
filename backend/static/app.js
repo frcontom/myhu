@@ -568,13 +568,13 @@ Trabaja con un enfoque profesional tipo ISTQB / QA Lead: pensamiento analítico,
 
 INSTRUCCIONES:
 1. La Historia de Usuario está en la sección "# HISTORIA DE USUARIO" al inicio del archivo: úsala como FUENTE DE VERDAD para todo tu análisis (componentes funcionales, ambigüedades, riesgos y reglas de negocio implícitas).
-2. Mejora los casos de prueba existentes y añade los que hagan falta (no genéricos, que detecten errores en producción).
-3. Cada caso DEBE incluir: Título, Descripción (clara y profesional), Precondiciones SIEMPRE, Pasos, y Resultado Esperado por cada paso.
+2. Analiza los casos generados localmente (sección "# CASOS DE PRUEBA") y MEJORA/AÑADE los que hagan falta para alcanzar en total {{CANTIDAD}} casos de prueba, cubriendo TODOS los criterios de aceptación (no genéricos, que detecten errores en producción).
+3. Cada caso DEBE incluir: Título (SIN prefijos TC-XXX), Descripción (clara y profesional), Precondiciones SIEMPRE, Pasos, y Resultado Esperado por cada paso.
 4. Formato de pasos: cada paso con su propio resultado esperado (nunca agrupar).
 5. Cubre mínimo: happy path, validaciones, reglas de negocio, negativos importantes y escenarios críticos.
 6. Lenguaje profesional listo para Jira/TestRail.
 7. Al final incluye: Cobertura lograda y Riesgos detectados adicionales.
-8. CONSERVA el identificador "## Caso N" y las etiquetas "- HU origen:/- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso. NO cambies el "- HU origen:" de ningún caso (indica la historia de usuario a la que pertenece).
+8. CONSERVA el identificador "## Caso N" y las etiquetas "- HU origen:/- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso. NO cambies el "- HU origen:" de ningún caso.
 9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).`;
 
 function flatten(value) {
@@ -589,7 +589,7 @@ function huTitleFor(id) {
   return "";
 }
 
-function buildExportMd() {
+function buildExportMd(promptText) {
   const lines = [];
   lines.push("# HISTORIA DE USUARIO");
   const hu = state.workItem;
@@ -623,7 +623,7 @@ function buildExportMd() {
   });
   lines.push("---");
   lines.push("# INSTRUCCIONES PARA EL MODELO");
-  lines.push(PLANTILLA_GPT);
+  lines.push(promptText || PLANTILLA_GPT);
   lines.push("");
   lines.push("# JSON PARA REIMPORTAR (responde aquí el JSON con los casos mejorados)");
   lines.push("```json");
@@ -634,7 +634,18 @@ function buildExportMd() {
 
 function exportToGpt() {
   if (!state.testCases.length) { alert("Primero genera casos"); return; }
-  const md = buildExportMd();
+  $("gpt-quantity").value = state.testCases.length || Number($("quantity").value) || 5;
+  $("gpt-prompt").value = PLANTILLA_GPT;
+  $("gpt-prompt").value = $("gpt-prompt").value.replace("{{CANTIDAD}}", $("gpt-quantity").value);
+  $("gpt-modal").classList.remove("hidden");
+}
+
+function downloadGptFile() {
+  let quantity = Number($("gpt-quantity").value) || 5;
+  let prompt = $("gpt-prompt").value.trim();
+  if (!prompt) prompt = PLANTILLA_GPT;
+  prompt = prompt.replace(/{{CANTIDAD}}/g, String(quantity));
+  const md = buildExportMd(prompt);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -649,7 +660,12 @@ function exportToGpt() {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(md).catch(() => {});
   }
-  alert("Archivo descargado y copiado al portapapeles. Pégalo en ChatGPT, aplica la plantilla y vuelve con el archivo mejorado.");
+  $("gpt-modal").classList.add("hidden");
+  alert("Archivo descargado y copiado al portapapeles. Pégalo en ChatGPT y vuelve con el archivo mejorado.");
+}
+
+function cancelGpt() {
+  $("gpt-modal").classList.add("hidden");
 }
 
 function normalizeImported(raw) {
@@ -810,6 +826,12 @@ $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-test-azure").addEventListener("click", testAzure);
 $("btn-add-case").addEventListener("click", addCaseManual);
 $("btn-export-gpt").addEventListener("click", exportToGpt);
+$("btn-gpt-ok").addEventListener("click", downloadGptFile);
+$("btn-gpt-cancel").addEventListener("click", cancelGpt);
+$("gpt-quantity").addEventListener("input", () => {
+  const v = $("gpt-quantity").value;
+  $("gpt-prompt").value = $("gpt-prompt").value.replace(/{{CANTIDAD}}/g, String(v || ""));
+});
 $("btn-import-gpt").addEventListener("click", importFromGpt);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
