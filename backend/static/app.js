@@ -42,8 +42,8 @@ function showHu(workItem) {
     `Estado: ${workItem.state}\n` +
     `Creado por: ${workItem.created_by}\n\n` +
     `Descripción:\n${workItem.description || "(sin descripción)"}\n\n` +
-    `Justificación:\n${workItem.justification || "(sin justificación)"}\n\n` +
-    `Criterios de aceptación:\n${workItem.acceptance_criteria || "(sin criterios)"}`;
+    `Criterios de aceptación:\n${workItem.acceptance_criteria || "(sin criterios)"}\n\n` +
+    `Justificación:\n${workItem.justification || "(sin justificación)"}`;
 }
 
 function renderCoverage() {
@@ -425,8 +425,8 @@ function buildExportMd() {
     lines.push(`- Título: ${flatten(hu.title)}`);
     lines.push(`- Tipo: ${flatten(hu.type)}`);
     lines.push(`- Descripción: ${flatten(hu.description)}`);
-    lines.push(`- Justificación: ${flatten(hu.justification)}`);
     lines.push(`- Criterios de aceptación: ${flatten(hu.acceptance_criteria)}`);
+    lines.push(`- Justificación: ${flatten(hu.justification)}`);
   } else {
     lines.push("- (no hay HU cargada)");
   }
