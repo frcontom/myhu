@@ -191,7 +191,7 @@ class AzureDevOpsClient:
             )
         return resp.json()
 
-    def get_or_create_suite(self, plan_id: int, suite_name: str) -> Dict[str, Any]:
+    def get_root_suite(self, plan_id: int) -> Dict[str, Any]:
         resp = httpx.get(
             self._url(f"/test/plans/{plan_id}/suites"),
             params={"api-version": "5.0"},
@@ -204,21 +204,11 @@ class AzureDevOpsClient:
             )
         suites = resp.json().get("value", [])
         for s in suites:
-            if s.get("name") == suite_name:
+            if not s.get("parentSuite"):
                 return s
-        body = {"suiteType": "StaticTestSuite", "name": suite_name}
-        resp = httpx.post(
-            self._url(f"/test/plans/{plan_id}/suites"),
-            params={"api-version": "5.0"},
-            headers=self._test_headers(),
-            json=body,
-            timeout=30.0,
-        )
-        if resp.status_code not in (200, 201):
-            raise AzureDevOpsError(
-                f"Test Suite create -> HTTP {resp.status_code}: {resp.text[:300]}"
-            )
-        return resp.json()
+        if suites:
+            return suites[0]
+        raise AzureDevOpsError("El Test Plan no tiene suites raíz.")
 
     def add_test_case_to_suite(self, plan_id: int, suite_id: int, test_case_id: int) -> None:
         resp = httpx.post(

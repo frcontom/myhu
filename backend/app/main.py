@@ -176,9 +176,7 @@ def create(req: CreateRequest) -> dict:
     if created:
         try:
             plan = azure_client.get_or_create_test_plan("QA Test Case Generator")
-            suite = azure_client.get_or_create_suite(
-                plan["id"], f"HU #{req.work_item_id}"
-            )
+            suite = azure_client.get_root_suite(plan["id"])
             for c in created:
                 azure_client.add_test_case_to_suite(plan["id"], suite["id"], c["id"])
             publish = {
