@@ -90,8 +90,24 @@ def build_prompt(
     else:
         coverage_directive = ""
 
+    example_block = """{
+  "analisis": "Componentes: asignadores por departamento, infraestructura central, sesiones de verificadores, monitoreo. Riesgos: pérdida de independencia entre departamentos, sesiones expiradas por inactividad, regresiones al centralizar, monitoreo incompleto. Ambigüedades: qué se considera 'periodo prolongado', alcance del monitoreo en tiempo real. Edge cases: caída de conectividad, operación concurrente de dos departamentos.",
+  "title": "Centralización de los asignadores de todos los departamentos en el Datacenter Nacional",
+  "description": "Verificar que los asignadores de mesas digitalizadas de todos los departamentos se encuentren centralizados en el Datacenter Nacional y que no permanezcan instancias operativas locales independientes.",
+  "priority": 1,
+  "type": "funcional",
+  "preconditions": "Existe un inventario oficial de los departamentos que utilizan el asignador. El Datacenter Nacional está disponible. Se dispone de acceso de verificación para cada departamento.",
+  "criterios": [1],
+  "steps": [
+    {"action": "Consultar el inventario oficial de departamentos que deben utilizar el asignador centralizado.", "expected": "Se identifica el conjunto completo de departamentos cubiertos por la solución centralizada."},
+    {"action": "Ingresar al entorno del Datacenter Nacional y consultar las instancias de asignadores disponibles.", "expected": "Se identifican instancias centralizadas correspondientes a todos los departamentos del inventario."},
+    {"action": "Comparar cada departamento del inventario contra las instancias disponibles en el Datacenter.", "expected": "Cada departamento cuenta con su asignador centralizado y no existen departamentos excluidos."},
+    {"action": "Verificar que el acceso operativo de cada departamento se realice contra la infraestructura centralizada.", "expected": "Las conexiones operativas de los departamentos utilizan el asignador del Datacenter Nacional."}
+  ]
+}"""
+
     return f"""
-Eres un QA senior especializado en diseño de casos de prueba.
+Eres un QA senior con enfoque ISTQB / QA Lead, especializado en diseño de casos de prueba profesionales y profundos (nada genérico).
 
 Analiza la siguiente Historia de Usuario y genera exactamente {quantity} casos de prueba.
 
@@ -117,10 +133,15 @@ Tipo: {work_item.get('type')}
 
 {coverage_directive}
 
+## EJEMPLO DE CALIDAD (imita EXACTAMENTE este nivel de detalle y profundidad)
+{example_block}
+
 ## REGLAS DE SALIDA
+0. ANTES de generar los casos, analiza la HU y escribe el campo "analisis" con los componentes funcionales, riesgos, ambigüedades y edge cases que detectes.
 1. Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown.
 2. La estructura debe ser exactamente:
 {{
+  "analisis": "análisis previo de la HU: componentes, riesgos, ambigüedades y edge cases",
   "summary": "resumen breve del enfoque de pruebas",
   "test_cases": [
     {{
@@ -140,6 +161,7 @@ Tipo: {work_item.get('type')}
 4. "criterios" es la lista de índices (empezando en 1) de los Criterios de Aceptación que ese caso cubre; puede ser vacía [].
 5. El campo "title" NO debe llevar prefijos como "TC-001:" ni numeración; solo un título descriptivo.
 6. Los casos deben ser variados: feliz, negativos, límites, edge cases.
+7. Las precondiciones deben ser específicas del negocio y verificables, como en el ejemplo.
 """.strip()
 
 
@@ -268,6 +290,7 @@ def _stream_once(
         "options": {
             "temperature": settings.ollama_temperature,
             "num_predict": settings.ollama_max_tokens,
+            "num_ctx": 8192,
         },
     }
 
