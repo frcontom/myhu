@@ -373,7 +373,7 @@ async function createCases() {
   if (state.lastPublish) {
     const p = state.lastPublish;
     msg += p.error
-      ? ` | Test Plans: no se publicó (${p.error})`
+      ? ` | Test Plans: no se publicó (${p.error})${p.error.includes("404") ? " → revisa que tu PAT tenga el scope 'Test Management → Read & Write'" : ""}`
       : ` | Test Plans: plan "${p.plan_name}" suite "${p.suite_name}"`;
   }
   $("create-result").innerHTML = msg;
