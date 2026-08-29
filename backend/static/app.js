@@ -86,6 +86,34 @@ function renderCases(cases) {
   cases.forEach((tc, idx) => container.appendChild(renderCase(tc, idx)));
 }
 
+function fieldLabel(text) {
+  const l = document.createElement("label");
+  l.className = "field-label";
+  l.textContent = text;
+  return l;
+}
+
+function makeTextarea(tc, field, placeholder) {
+  const ta = document.createElement("textarea");
+  ta.className = "case-pre";
+  ta.placeholder = placeholder;
+  ta.value = tc[field] || "";
+  ta.addEventListener("input", () => { tc[field] = ta.value; });
+  return ta;
+}
+
+function makeCritInput(tc) {
+  const input = document.createElement("input");
+  input.className = "case-crit";
+  input.placeholder = "Ej. 1,3";
+  input.value = (tc.criterios || []).join(", ");
+  input.addEventListener("input", () => {
+    tc.criterios = input.value.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+    renderCoverage();
+  });
+  return input;
+}
+
 function renderCase(tc, idx) {
   const div = document.createElement("div");
   div.className = "case";
@@ -111,7 +139,7 @@ function renderCase(tc, idx) {
   const title = document.createElement("input");
   title.className = "case-title";
   title.value = tc.title;
-  title.placeholder = "Título";
+  title.placeholder = "Ej. Validar inicio de sesión con credenciales válidas";
   title.addEventListener("input", () => { tc.title = title.value; });
 
   const priority = document.createElement("select");
@@ -145,33 +173,29 @@ function renderCase(tc, idx) {
     renderCases(state.testCases);
   });
 
-  head.append(label, title, priority, type, delCase);
+  head.append(label, priority, type, delCase);
   if (huBadge) head.appendChild(huBadge);
   div.appendChild(head);
 
-  const desc = document.createElement("textarea");
-  desc.className = "case-pre";
-  desc.placeholder = "Descripción";
-  desc.value = tc.description || "";
-  desc.addEventListener("input", () => { tc.description = desc.value; });
-  div.appendChild(desc);
+  div.append(fieldLabel("Título"), title);
 
-  const pre = document.createElement("textarea");
-  pre.className = "case-pre";
-  pre.placeholder = "Precondiciones";
-  pre.value = tc.preconditions;
-  pre.addEventListener("input", () => { tc.preconditions = pre.value; });
-  div.appendChild(pre);
+  div.append(
+    fieldLabel("Precondiciones"),
+    makeTextarea(tc, "preconditions", "Ej. usuario registrado y activo"),
+    fieldLabel("Descripción"),
+    makeTextarea(tc, "description", "Ej. Validar el comportamiento del sistema cuando…"),
+    fieldLabel("Criterios de aceptación que cubre (ej. 1,3)"),
+    makeCritInput(tc)
+  );
 
-  const crit = document.createElement("input");
-  crit.className = "case-crit";
-  crit.placeholder = "Criterios de aceptación que cubre (ej. 1,3)";
-  crit.value = (tc.criterios || []).join(", ");
-  crit.addEventListener("input", () => {
-    tc.criterios = crit.value.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-    renderCoverage();
-  });
-  div.appendChild(crit);
+  const stepHead = document.createElement("div");
+  stepHead.className = "step-head";
+  const shA = document.createElement("span");
+  shA.textContent = "Acción";
+  const shE = document.createElement("span");
+  shE.textContent = "Resultado esperado";
+  stepHead.append(shA, shE, document.createElement("span"));
+  div.appendChild(stepHead);
 
   tc.steps.forEach((step, i) => div.appendChild(renderStep(tc, step, i)));
 
