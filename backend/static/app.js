@@ -610,7 +610,7 @@ function huTitleFor(id) {
   return "";
 }
 
-function buildExportMd(promptText) {
+function buildExportMd(promptText, quantity) {
   const lines = [];
   lines.push("# HISTORIA DE USUARIO");
   const hu = state.workItem;
@@ -624,6 +624,11 @@ function buildExportMd(promptText) {
   } else {
     lines.push("- (no hay HU cargada)");
   }
+  lines.push("");
+  lines.push("# SOLICITUD");
+  lines.push(`- Cantidad total de casos de prueba esperados al final: ${quantity}`);
+  lines.push("- Cubrir TODOS los criterios de aceptación de la HU.");
+  lines.push("- Mejorar los casos locales y añadir los que falten.");
   lines.push("");
   lines.push("# CASOS DE PRUEBA");
   state.testCases.forEach((tc, i) => {
@@ -666,7 +671,7 @@ function downloadGptFile() {
   let prompt = $("gpt-prompt").value.trim();
   if (!prompt) prompt = PLANTILLA_GPT;
   prompt = prompt.replace(/{{CANTIDAD}}/g, String(quantity));
-  const md = buildExportMd(prompt);
+  const md = buildExportMd(prompt, quantity);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
