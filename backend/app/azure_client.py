@@ -1,20 +1,73 @@
 import base64
 import re
+from html.parser import HTMLParser
 from typing import Any, Dict, List
 
 import httpx
 
 from .config import settings
 
+_BLOCK_TAGS = {"p", "div", "br", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "table", "section"}
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: List[str] = []
+        self._skip = 0
+
+    def handle_starttag(self, tag: str, attrs: Any) -> None:
+        if tag in ("script", "style"):
+            self._skip += 1
+        elif tag == "li":
+            self.parts.append("\n- ")
+        elif tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style"):
+            self._skip = max(0, self._skip - 1)
+        elif tag in ("li", "p", "tr"):
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip == 0:
+            self.parts.append(data)
+
+
+def html_to_text(html: str) -> str:
+    if not html:
+        return ""
+    parser = _TextExtractor()
+    try:
+        parser.feed(html)
+    except Exception:
+        return html
+    lines = [line.strip() for line in "".join(parser.parts).splitlines()]
+    return "\n".join(line for line in lines if line)
+
 
 def parse_criteria(text: str) -> List[str]:
     if not text:
         return []
-    lines = [
-        re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
-        for line in text.splitlines()
-    ]
-    return [line for line in lines if line]
+    criteria: List[str] = []
+    current = ""
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if re.match(r"^\s*(?:[-*•]|\d+[.)])", line):
+            if current:
+                criteria.append(current.strip())
+            current = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line)
+        elif current:
+            current += " " + line
+        else:
+            current = line
+    if current:
+        criteria.append(current.strip())
+    skip = {"criterio de aceptación", "criterios de aceptación", "criterio de aceptacion", "criterios de aceptacion"}
+    return [c for c in criteria if c and c.lower() not in skip]
 
 
 class AzureDevOpsError(Exception):
@@ -78,12 +131,13 @@ class AzureDevOpsClient:
         )
         data = resp.json()
         fields = data.get("fields", {})
-        acceptance_criteria = fields.get("Microsoft.VSTS.Common.AcceptanceCriteria")
+        description = html_to_text(fields.get("System.Description"))
+        acceptance_criteria = html_to_text(fields.get("Microsoft.VSTS.Common.AcceptanceCriteria"))
         return {
             "id": data.get("id"),
             "type": fields.get("System.WorkItemType"),
             "title": fields.get("System.Title"),
-            "description": fields.get("System.Description"),
+            "description": description,
             "acceptance_criteria": acceptance_criteria,
             "criteria_list": parse_criteria(acceptance_criteria),
             "state": fields.get("System.State"),
