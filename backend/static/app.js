@@ -343,6 +343,7 @@ async function createCases() {
   const allCreated = [];
   let err = null;
   let demo = false;
+  let lastPublish = null;
   for (const [huId, cases] of Object.entries(groups)) {
     try {
       const data = await api("/api/create", {
@@ -351,22 +352,31 @@ async function createCases() {
       });
       allCreated.push(...(data.created || []));
       if (data.demo) demo = true;
+      if (data.publish) lastPublish = data.publish;
       if (data.error) err = data.error;
     } catch (e) {
       err = e.message;
       break;
     }
   }
+  state.lastPublish = lastPublish;
   setLoading(false);
 
   const links = allCreated
     .map((c) => (c.url ? `<a href="${c.url}" target="_blank" rel="noopener">#${c.id}</a>` : `#${c.id}`))
     .join(", ");
-  $("create-result").innerHTML = demo
+  let msg = demo
     ? `MODO DEMO: no se insertó en Azure. Se enviarían ${allCreated.length} test cases: ${allCreated.map((c) => `#${c.id}`).join(", ")}`
     : err
     ? `Se crearon ${allCreated.length} y falló en: ${err}`
     : `Creados ${allCreated.length} test cases en Azure DevOps: ${links}`;
+  if (state.lastPublish) {
+    const p = state.lastPublish;
+    msg += p.error
+      ? ` | Test Plans: no se publicó (${p.error})`
+      : ` | Test Plans: plan "${p.plan_name}" suite "${p.suite_name}"`;
+  }
+  $("create-result").innerHTML = msg;
   setChip("chip-ok", demo ? "demo" : "conectado");
 }
 

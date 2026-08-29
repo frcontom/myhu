@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     azure_devops_project: str = ""
     azure_devops_pat: str = ""
     azure_devops_url: str = ""
+    azure_devops_test_plan_id: str = ""
 
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:14b-instruct"

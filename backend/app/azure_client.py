@@ -153,6 +153,87 @@ class AzureDevOpsClient:
     def get_work_item_url(self, work_item_id: int) -> str:
         return f"{settings.api_base}/{self._project}/_apis/wit/workItems/{work_item_id}"
 
+    def _test_headers(self) -> Dict[str, str]:
+        return {**self._auth, "Content-Type": "application/json"}
+
+    def get_or_create_test_plan(self, plan_name: str) -> Dict[str, Any]:
+        resp = httpx.get(
+            self._url("/test/plans"),
+            params={"api-version": "7.1"},
+            headers=self._auth,
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise AzureDevOpsError(f"Test Plans GET -> HTTP {resp.status_code}: {resp.text[:300]}")
+        plans = resp.json().get("value", [])
+        if settings.azure_devops_test_plan_id:
+            for p in plans:
+                if str(p.get("id")) == settings.azure_devops_test_plan_id:
+                    return p
+        for p in plans:
+            if p.get("name") == plan_name:
+                return p
+        if plans:
+            return plans[0]
+        body = {
+            "name": plan_name,
+            "area": {"name": self._project},
+            "iteration": self._project,
+        }
+        resp = httpx.post(
+            self._url("/test/plans"),
+            params={"api-version": "7.1"},
+            headers=self._test_headers(),
+            json=body,
+            timeout=30.0,
+        )
+        if resp.status_code not in (200, 201):
+            raise AzureDevOpsError(
+                f"Test Plan create -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        return resp.json()
+
+    def get_or_create_suite(self, plan_id: int, suite_name: str) -> Dict[str, Any]:
+        resp = httpx.get(
+            self._url(f"/test/plans/{plan_id}/suites"),
+            params={"api-version": "7.1"},
+            headers=self._auth,
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise AzureDevOpsError(
+                f"Test Suites GET -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        suites = resp.json().get("value", [])
+        for s in suites:
+            if s.get("name") == suite_name:
+                return s
+        body = {"suiteType": "StaticTestSuite", "name": suite_name}
+        resp = httpx.post(
+            self._url(f"/test/plans/{plan_id}/suites"),
+            params={"api-version": "7.1"},
+            headers=self._test_headers(),
+            json=body,
+            timeout=30.0,
+        )
+        if resp.status_code not in (200, 201):
+            raise AzureDevOpsError(
+                f"Test Suite create -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        return resp.json()
+
+    def add_test_case_to_suite(self, plan_id: int, suite_id: int, test_case_id: int) -> None:
+        resp = httpx.post(
+            self._url(f"/test/plans/{plan_id}/suites/{suite_id}/testcases/{test_case_id}"),
+            params={"api-version": "7.1"},
+            headers=self._test_headers(),
+            timeout=30.0,
+        )
+        if resp.status_code not in (200, 201):
+            raise AzureDevOpsError(
+                f"Add Test Case a suite -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+
     def test_connection(self) -> Dict[str, Any]:
         report = {
             "org_ok": False,

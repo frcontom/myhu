@@ -172,7 +172,32 @@ def create(req: CreateRequest) -> dict:
         except AzureDevOpsError as exc:
             return {"created": created, "error": str(exc)}
 
-    return {"created": created, "count": len(created), "linked_to_work_item": req.work_item_id}
+    publish = None
+    if created:
+        try:
+            plan = azure_client.get_or_create_test_plan(
+                f"QA Test Case Generator - HU #{req.work_item_id}"
+            )
+            suite = azure_client.get_or_create_suite(
+                plan["id"], f"HU #{req.work_item_id}"
+            )
+            for c in created:
+                azure_client.add_test_case_to_suite(plan["id"], suite["id"], c["id"])
+            publish = {
+                "plan_id": plan.get("id"),
+                "plan_name": plan.get("name"),
+                "suite_id": suite.get("id"),
+                "suite_name": suite.get("name"),
+            }
+        except AzureDevOpsError as exc:
+            publish = {"error": str(exc)}
+
+    return {
+        "created": created,
+        "count": len(created),
+        "linked_to_work_item": req.work_item_id,
+        "publish": publish,
+    }
 
 
 app.mount("/", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static"), html=True), name="static")
