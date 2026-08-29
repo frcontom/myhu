@@ -159,7 +159,7 @@ class AzureDevOpsClient:
     def get_or_create_test_plan(self, plan_name: str) -> Dict[str, Any]:
         resp = httpx.get(
             self._url("/test/plans"),
-            params={"api-version": "7.1"},
+            params={"api-version": "5.0"},
             headers=self._auth,
             timeout=30.0,
         )
@@ -173,8 +173,6 @@ class AzureDevOpsClient:
         for p in plans:
             if p.get("name") == plan_name:
                 return p
-        if plans:
-            return plans[0]
         body = {
             "name": plan_name,
             "area": {"name": self._project},
@@ -182,7 +180,7 @@ class AzureDevOpsClient:
         }
         resp = httpx.post(
             self._url("/test/plans"),
-            params={"api-version": "7.1"},
+            params={"api-version": "5.0"},
             headers=self._test_headers(),
             json=body,
             timeout=30.0,
@@ -196,7 +194,7 @@ class AzureDevOpsClient:
     def get_or_create_suite(self, plan_id: int, suite_name: str) -> Dict[str, Any]:
         resp = httpx.get(
             self._url(f"/test/plans/{plan_id}/suites"),
-            params={"api-version": "7.1"},
+            params={"api-version": "5.0"},
             headers=self._auth,
             timeout=30.0,
         )
@@ -211,7 +209,7 @@ class AzureDevOpsClient:
         body = {"suiteType": "StaticTestSuite", "name": suite_name}
         resp = httpx.post(
             self._url(f"/test/plans/{plan_id}/suites"),
-            params={"api-version": "7.1"},
+            params={"api-version": "5.0"},
             headers=self._test_headers(),
             json=body,
             timeout=30.0,
@@ -225,7 +223,7 @@ class AzureDevOpsClient:
     def add_test_case_to_suite(self, plan_id: int, suite_id: int, test_case_id: int) -> None:
         resp = httpx.post(
             self._url(f"/test/plans/{plan_id}/suites/{suite_id}/testcases/{test_case_id}"),
-            params={"api-version": "7.1"},
+            params={"api-version": "5.0"},
             headers=self._test_headers(),
             timeout=30.0,
         )
