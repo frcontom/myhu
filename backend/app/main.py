@@ -156,14 +156,9 @@ def create(req: CreateRequest) -> dict:
 
     created = []
     for tc in req.test_cases:
-        steps = []
-        if tc.preconditions:
-            steps.append({"action": "Precondiciones", "expected": tc.preconditions})
-        steps.extend(
-            {"action": s.get("action", ""), "expected": s.get("expected", "")}
-            for s in tc.steps
+        steps_html = steps_to_tcm_html(
+            [{"action": s.get("action", ""), "expected": s.get("expected", "")} for s in tc.steps]
         )
-        steps_html = steps_to_tcm_html(steps)
         try:
             item = azure_client.create_test_case(
                 title=tc.title,
@@ -171,6 +166,7 @@ def create(req: CreateRequest) -> dict:
                 steps_html=steps_html,
                 user_story_id=req.work_item_id,
                 priority=tc.priority,
+                preconditions=tc.preconditions,
             )
             created.append(item)
         except AzureDevOpsError as exc:

@@ -223,6 +223,7 @@ class AzureDevOpsClient:
         steps_html: str,
         user_story_id: int,
         priority: int = 2,
+        preconditions: str = "",
     ) -> Dict[str, Any]:
         fields: Dict[str, Any] = {
             "/fields/System.Title": title,
@@ -231,6 +232,8 @@ class AzureDevOpsClient:
             fields["/fields/System.Description"] = description
         if priority:
             fields["/fields/Microsoft.VSTS.Common.Priority"] = priority
+        if preconditions:
+            fields["/fields/Custom.Preconditions"] = preconditions
         if steps_html:
             fields["/fields/Microsoft.VSTS.TCM.Steps"] = steps_html
 
@@ -240,7 +243,7 @@ class AzureDevOpsClient:
                 "op": "add",
                 "path": "/relations/-",
                 "value": {
-                    "rel": "System.LinkTypes.Related",
+                    "rel": "Microsoft.VSTS.Common.Tests",
                     "url": self.get_work_item_url(user_story_id),
                 },
             }
