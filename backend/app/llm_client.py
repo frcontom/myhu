@@ -385,10 +385,10 @@ def steps_to_tcm_html(steps: List[Dict[str, str]]) -> str:
         action = _escape_html(step.get("action", ""))
         expected = _escape_html(step.get("expected", ""))
         parts.append(
-            f'<step id="{i * 2 - 1}" type="Action"><parameterizedString isformatted="true">{action}</parameterizedString><description/></step>'
-        )
-        parts.append(
-            f'<step id="{i * 2}" type="ExpectedResult"><parameterizedString isformatted="true">{expected}</parameterizedString><description/></step>'
+            f'<step id="{i * 2}" type="ValidateStep">'
+            f'<parameterizedString isformatted="true">&lt;DIV&gt;&lt;P&gt;{action}&lt;/P&gt;&lt;/DIV&gt;</parameterizedString>'
+            f'<parameterizedString isformatted="true">{expected}</parameterizedString>'
+            f'<description/></step>'
         )
     parts.append("</steps>")
     return "".join(parts)
