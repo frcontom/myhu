@@ -875,6 +875,7 @@ function applyPreset(name) {
 }
 
 $("btn-generate").addEventListener("click", generate);
+$("btn-gpt-only").addEventListener("click", exportToGpt);
 $("btn-cancel-gen").addEventListener("click", cancelGeneration);
 $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-test-azure").addEventListener("click", testAzure);
