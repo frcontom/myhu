@@ -155,6 +155,16 @@ def create(req: CreateRequest) -> dict:
         raise HTTPException(status_code=400, detail="Configura AZURE_DEVOPS_* en el archivo .env")
 
     created = []
+    iteration_path = ""
+    area_path = ""
+    if not settings.demo_mode:
+        try:
+            hu = azure_client.get_work_item(req.work_item_id)
+            iteration_path = hu.get("iteration_path") or ""
+            area_path = hu.get("area_path") or ""
+        except AzureDevOpsError:
+            pass
+
     for tc in req.test_cases:
         steps_html = steps_to_tcm_html(
             [{"action": s.get("action", ""), "expected": s.get("expected", "")} for s in tc.steps]
@@ -167,6 +177,8 @@ def create(req: CreateRequest) -> dict:
                 user_story_id=req.work_item_id,
                 priority=tc.priority,
                 preconditions=tc.preconditions,
+                iteration_path=iteration_path,
+                area_path=area_path,
             )
             created.append(item)
         except AzureDevOpsError as exc:

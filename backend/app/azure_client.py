@@ -94,6 +94,8 @@ def sample_work_item(work_item_id: int) -> Dict[str, Any]:
         "justification": "Garantizar que ningún formulario digitalizado se pierda por fallas del OCR/ICR.",
         "state": "New",
         "created_by": "Modo DEMO (sin Azure DevOps)",
+        "iteration_path": "",
+        "area_path": "",
     }
 
 
@@ -148,6 +150,8 @@ class AzureDevOpsClient:
             "justification": justification,
             "state": fields.get("System.State"),
             "created_by": fields.get("System.CreatedBy", {}).get("displayName"),
+            "iteration_path": fields.get("System.IterationPath"),
+            "area_path": fields.get("System.AreaPath"),
         }
 
     def get_work_item_url(self, work_item_id: int) -> str:
@@ -293,6 +297,8 @@ class AzureDevOpsClient:
         user_story_id: int,
         priority: int = 2,
         preconditions: str = "",
+        iteration_path: str = "",
+        area_path: str = "",
     ) -> Dict[str, Any]:
         fields: Dict[str, Any] = {
             "/fields/System.Title": title,
@@ -303,6 +309,10 @@ class AzureDevOpsClient:
             fields["/fields/Microsoft.VSTS.Common.Priority"] = priority
         if preconditions:
             fields["/fields/Custom.Preconditions"] = preconditions
+        if iteration_path:
+            fields["/fields/System.IterationPath"] = iteration_path
+        if area_path:
+            fields["/fields/System.AreaPath"] = area_path
         if steps_html:
             fields["/fields/Microsoft.VSTS.TCM.Steps"] = steps_html
 
