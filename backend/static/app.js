@@ -34,16 +34,38 @@ function setChip(kind, text) {
   chip.textContent = text;
 }
 
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function showHu(workItem) {
   $("card-hu").classList.remove("hidden");
-  $("hu-output").textContent =
-    `ID: ${workItem.id}\n` +
-    `Título: ${workItem.title}\n` +
-    `Estado: ${workItem.state}\n` +
-    `Creado por: ${workItem.created_by}\n\n` +
-    `Descripción:\n${workItem.description || "(sin descripción)"}\n\n` +
-    `Criterios de aceptación:\n${workItem.acceptance_criteria || "(sin criterios)"}\n\n` +
-    `Justificación:\n${workItem.justification || "(sin justificación)"}`;
+  const stateBadge = workItem.state
+    ? `<span class="hu-state">${escapeHtml(workItem.state)}</span>`
+    : "";
+  $("hu-output").innerHTML = `
+    <div class="hu-head">
+      <span class="hu-id">HU #${escapeHtml(workItem.id)}</span>
+      <span class="hu-title">${escapeHtml(workItem.title)}</span>
+      ${stateBadge}
+    </div>
+    <div class="hu-meta">Creado por: ${escapeHtml(workItem.created_by || "—")}</div>
+    <div class="hu-section">
+      <h3>Descripción</h3>
+      <p>${escapeHtml(workItem.description || "(sin descripción)")}</p>
+    </div>
+    <div class="hu-section">
+      <h3>Criterios de aceptación</h3>
+      <p>${escapeHtml(workItem.acceptance_criteria || "(sin criterios)")}</p>
+    </div>
+    <div class="hu-section">
+      <h3>Justificación</h3>
+      <p>${escapeHtml(workItem.justification || "(sin justificación)")}</p>
+    </div>`;
 }
 
 function renderCoverage() {
