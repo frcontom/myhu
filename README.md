@@ -176,6 +176,28 @@ Si no configuras `AZURE_DEVOPS_*`, el sistema entra en **modo demo**: usa una HU
 - El front muestra una **barra de progreso en vivo** (tokens, tokens/s, tiempo) vía streaming SSE, con botón **Cancelar generación**.
 - Para acelerar: `OLLAMA_MODEL=qwen2.5:3b-instruct` (~2-3x más rápido), pedir menos casos, o esperar la 2ª generación (el modelo queda cargado 30 min).
 
+## Mejorar la calidad: modelos alternativos
+
+Si quieres un modelo que **razone más** y dé mejores resultados (a costa de velocidad), puedes usar:
+
+| Modelo | Tamaño | Ventaja | Contra |
+|--------|--------|---------|--------|
+| `qwen2.5:7b-instruct` | ~4.7 GB | Balance calidad/velocidad (actual) | — |
+| `deepseek-r1:7b` | ~4.7 GB | **Razona paso a paso** (chain-of-thought): análisis más profundo y casos mejor pensados | ~2x más lento |
+| `qwen2.5-coder:7b` | ~4.7 GB | Excelente con JSON estructurado | Menos "pensamiento" |
+| `qwen2.5:3b-instruct` | ~2 GB | ~2-3x más rápido | Menos calidad |
+
+**Cómo cambiarlo (ej. a `deepseek-r1:7b`):**
+```powershell
+# 1. Edita .env → OLLAMA_MODEL=deepseek-r1:7b
+# 2. Descarga el modelo
+docker exec -it qa-testcase-ollama ollama pull deepseek-r1:7b
+# 3. Reinicia
+docker compose up -d
+```
+
+> ⚠️ El modelo configurado en `.env` debe estar descargado en Ollama (`docker exec -it qa-testcase-ollama ollama list`). Con ~7 GB de RAM libre, `deepseek-r1:7b` es el tope recomendado.
+
 ## Comandos útiles
 
 ```powershell
