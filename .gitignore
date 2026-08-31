@@ -13,3 +13,6 @@ backend/ca/*.cer
 .vscode/
 .idea/
 *.swp
+
+# archivos zip / build
+*.zip
