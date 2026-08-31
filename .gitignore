@@ -4,6 +4,11 @@ __pycache__/
 *.pyc
 .venv/
 
+# CAs corporativas (Netskope / proxy) - nunca versionar
+backend/ca/*.crt
+backend/ca/*.pem
+backend/ca/*.cer
+
 # Editor
 .vscode/
 .idea/
