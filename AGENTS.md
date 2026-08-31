@@ -73,9 +73,21 @@ azureDevops/
 | POST | `/api/generate` | Generación bloqueante |
 | POST | `/api/create` | Crea Test Cases en Azure enlazados a la HU |
 
-## Flujo "Pasar a GPT" (sin API de OpenAI)
+## Flujo "Pasar a ChatGPT" (sin API de OpenAI, sin Ollama)
 
-El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual: el front exporta un `.md` (`casos_para_gpt.md`) con HU + casos + plantilla "Hacking QA" embebida + bloque ```` ```json ```` reimportable. El usuario pega el archivo en ChatGPT, mejora los casos, y **re-importa** la respuesta. El import (`parseImportText` en `app.js`) prefiere el bloque JSON, luego JSON completo, luego parseo de markdown (`## Caso N` + etiquetas). No hay backend involucrado en esto (todo frontend).
+El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual y NO toca Ollama:
+- Botón **"Pasar a ChatGPT (sin Ollama)"** (visible en el formulario) → modal con **cantidad de casos** + **prompt editable** (plantilla "Hacking QA" con token `{{CANTIDAD}}`).
+- Exporta `casos_para_gpt.md` con HU + sección `# SOLICITUD` + casos locales (o nota "genera desde cero") + bloque ```` ```json ```` reimportable (con **JSON de ejemplo** si no hay casos locales).
+- El usuario pega el archivo en ChatGPT, y **re-importa** la respuesta. `parseImportText` (en `app.js`) prefiere el bloque JSON, luego JSON completo, luego parseo de markdown. Todo frontend.
+- Si no hay HU cargada, `exportToGpt` la carga vía `/api/hu/{id}` automáticamente.
+
+## Funcionalidades del front (app.js)
+
+- **Drag & drop** para reordenar pasos (cada `.step-row` es draggable; `dragState` global por caso).
+- **Cobertura**: panel con ✔/✖ por criterio, **% de cobertura**, y botón **"Completar cobertura"** (`completeCoverage`) que genera casos para los criterios faltantes vía streaming.
+- **Cancelar generación**: botón en el loader; `cancelRequested` + `activeStream.close()` para cortar el SSE y el batch.
+- **Persistencia local**: `saveState()`/`restoreState()` guardan `{workItem, testCases, huMap}` en `localStorage` ("Limpiar" lo borra).
+- Etiquetas de campo (`fieldLabel`), cabecera de pasos, y vista de HU estructurada (`showHu`).
 
 ## Puntos críticos del código (no romper)
 
@@ -83,7 +95,8 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual: el front exp
 - **`azure_client.py:86`**: la URL del work item es `/_apis/wit/workItems/{id}` y el POST va a `/wit/workitems/$Test Case` (con `$` URL-encoded). El `$` en la ruta debe escribirse `$Test Case`; httpx lo codifica.
 - **`azure_client.py:79`**: la relación usa `rel: "Microsoft.VSTS.Common.TestedBy-Reverse"`. ⚠️ Es el nombre **direccional** que Azure acepta para el enlace "Tests"/"Tested by" (el caso queda en la pestaña "Tested by" de la HU). Los nombres base `Microsoft.VSTS.Common.Tests` / `Microsoft.VSTS.Common.TestedBy` dan 400 "Unknown relation type"; `System.LinkTypes.Related` siempre funciona pero no es "Tested by".
 - **`llm_client.py`**: `format="json"` en Ollama fuerza JSON, pero igual se normaliza con `_parse_json` y `_normalize_case`. Nunca confiar en que el modelo devuelva JSON perfecto.
-- **`llm_client.py:147` `steps_to_tcm_html`**: el formato HTML de pasos de Azure DevOps es `id` par/impar (Action + ExpectedResult), `last="{len(steps)*2}"`, y hay que escapar HTML (`_escape_html`).
+- **`llm_client.py` `steps_to_tcm_html`**: el formato que la org del usuario reconoce es `<step type="ValidateStep">` con **DOS** `<parameterizedString>` (acción + esperado), `last="{len(steps)*2}"` y escapado HTML. ⚠️ El formato estándar `Action`/`ExpectedResult` NO renderiza el editor de pasos en esta org.
+- **`Dockerfile`**: soporte de CA corporativa opcional (Netskope). Copia `ca/corporate-ca-chain.crt` → `update-ca-certificates` y usa `PIP_CERT`; si el archivo no existe, build normal. Scripts en `scripts/generar_ca.bat|ps1`.
 - **`main.py:108`**: `StaticFiles(html=True)` montado en `/`; las rutas `/api/*` se registran ANTES para que el mount no las intercepte.
 - El front usa IDs de elementos por `document.getElementById`, sin framework; el estado vive en la variable global `state` de `app.js`.
 

@@ -103,12 +103,51 @@ Si algo falla, mira la tabla de abajo.
 
 ### Paso 4. Usar
 
-1. Escribe el **ID de la HU** (y opcionalmente varios IDs separados por coma).
-2. Elige la **cantidad** de casos y las **instrucciones** (o un preset).
-3. **Generar casos de prueba** → el agente lee la HU de Azure y el LLM local genera los casos.
-4. **Revisa/edita** cada caso (título, descripción, precondiciones, pasos, criterios que cubre).
-5. (Opcional) **Pasar a GPT** → descarga `.md` para que ChatGPT (plan GO) mejore los casos → **Importar mejora de GPT**.
-6. **Crear en Azure DevOps** → crea los `Test Case` **enlazados a la HU** (aparecerán en la pestaña "Tested by" de la HU). El resultado muestra enlaces clicables a cada Test Case.
+**Dos formas de generar los casos de prueba:**
+
+**A. Con el modelo local (Ollama):**
+1. Escribe el **ID de la HU** (puedes poner varios separados por coma).
+2. Elige la **cantidad** de casos (1-7) y las instrucciones (o un preset).
+3. **Generar casos de prueba** → el LLM local los genera con barra de progreso (botón **Cancelar generación** disponible).
+4. **Revisa/edita** cada caso: título, precondiciones, descripción, criterios que cubre, pasos (reordénalos con **drag & drop** ⠿).
+5. **Crear en Azure DevOps** → crea los `Test Case` enlazados a la HU (pestaña **"Tested by"**, con precondiciones y pasos editables). El panel de **cobertura** (✔/✖) muestra qué criterios quedan sin cubrir y el botón **"Completar cobertura"** genera los faltantes.
+
+**B. Directo con ChatGPT (sin Ollama):**
+1. Escribe el **ID de la HU**.
+2. **"Pasar a ChatGPT (sin Ollama)"** → se abre un modal: elige la **cantidad** de casos y edita el prompt si quieres.
+3. **"Descargar y copiar"** el `.md` (HU + SOLICITUD + JSON de ejemplo).
+4. Pégalo en **ChatGPT** → te devuelve el archivo mejorado.
+5. **"Importar mejora de GPT"** → se cargan los casos en el editor.
+6. **"Crear en Azure DevOps"**.
+
+> El editor **se guarda solo en el navegador** (localStorage): recargar no pierde el trabajo. "Limpiar" borra lo guardado.
+
+---
+
+## CA corporativa / SSL (red con Netskope o proxy)
+
+Si en la red corporativa `docker compose build` falla con `SSLCertVerificationError: self-signed certificate in certificate chain` al ejecutar `pip install`, es porque el proxy de inspección HTTPS (Netskope) firma los certificados de PyPI y el contenedor no confía en la **CA raíz corporativa**.
+
+**Solución (en la máquina afectada):**
+
+1. Genera la cadena completa (**hoja + intermedias + RAÍZ**) con el script:
+   ```cmd
+   scripts\generar_ca.bat
+   ```
+   Debe terminar con `Verify return code: 0 (ok)`. Si `openssl` no está en el PATH, el script usa el de Git for Windows.
+
+2. Construye el backend:
+   ```cmd
+   docker compose build --no-cache backend
+   docker compose up -d --build
+   ```
+
+El `Dockerfile` ya:
+- Instala `backend/ca/corporate-ca-chain.crt` en el trust store (`update-ca-certificates`).
+- Configura `PIP_CERT` para que pip use el bundle del sistema.
+- Si el archivo de CA no existe, el build funciona normal (entornos sin proxy).
+
+> ⚠️ La CA corporativa se ignora en git (`backend/ca/*.crt`): **nunca la versiones**.
 
 ---
 
@@ -134,8 +173,35 @@ Si no configuras `AZURE_DEVOPS_*`, el sistema entra en **modo demo**: usa una HU
 ## Velocidad y barra de progreso
 
 - La generación es lenta a propósito: el modelo corre en **CPU** y genera token a token (~7 tokens/s). 5 casos ≈ 2-5 min.
-- El front muestra una **barra de progreso en vivo** (tokens, tokens/s, tiempo) vía streaming SSE.
+- El front muestra una **barra de progreso en vivo** (tokens, tokens/s, tiempo) vía streaming SSE, con botón **Cancelar generación**.
 - Para acelerar: `OLLAMA_MODEL=qwen2.5:3b-instruct` (~2-3x más rápido), pedir menos casos, o esperar la 2ª generación (el modelo queda cargado 30 min).
+
+## Comandos útiles
+
+```powershell
+# Copiar configuración
+Copy-Item .env.example .env
+
+# Levantar (o reiniciar tras cambios de código/.env)
+docker compose up -d --build
+
+# Bajar y subir todo (limpieza total)
+docker compose down
+docker compose up -d --build
+
+# Descargar el modelo si falta
+docker exec -it qa-testcase-ollama ollama pull qwen2.5:7b-instruct
+
+# Ver logs del backend
+docker logs qa-testcase-backend --tail 50
+
+# Generar la CA corporativa (red con Netskope/proxy)
+scripts\generar_ca.bat
+
+# Validar estado y conexión (desde PowerShell)
+Invoke-RestMethod http://localhost:8000/api/health
+Invoke-RestMethod http://localhost:8000/api/test-azure
+```
 
 ## Endpoints
 
@@ -153,3 +219,5 @@ Si no configuras `AZURE_DEVOPS_*`, el sistema entra en **modo demo**: usa una HU
 - El PAT **nunca sale** del contenedor; se lee desde `.env` (que **no** se versiona).
 - La conexión usa la REST API `api-version=7.1`.
 - Para cambiar de modelo solo edita `OLLAMA_MODEL` en `.env` y `docker compose up -d`.
+- Los Test Case se crean con: título limpio (sin prefijos TC), descripción, prioridad, precondiciones (`Custom.Preconditions`), pasos (`ValidateStep`, editables) y **enlace "Tested by"** a la HU. La iteración/área se copian de la HU.
+- **Publicación opcional a Test Plans**: solo si configuras `AZURE_DEVOPS_TEST_PLAN_ID` en el `.env` (requiere PAT con `Test Management → Read & Write`).
