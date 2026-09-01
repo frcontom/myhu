@@ -17,7 +17,9 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ollama
     container_name: qa-testcase-ollama
     ports:
       - "11434:11434"

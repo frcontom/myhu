@@ -1,0 +1,18 @@
+# Certificados corporativos Netskope
+
+Coloca aquí los certificados exportados desde Windows (formato PEM/CRT):
+
+- `netskope-root.crt`          (CA raíz: CN=*.dfw3.goskope.com, O=Netskope Inc.)
+- `netskope-intermediate.crt`  (CA intermedia: CN=ca.thomasgreg.goskope.com, O=INVOTECSA)
+
+Los usa:
+- `Dockerfile` (backend) → `/usr/local/share/ca-certificates/` + `update-ca-certificates` + `PIP_CERT`
+- `Dockerfile.ollama` (ollama) → `/usr/local/share/ca-certificates/` + `SSL_CERT_FILE`
+
+Obtención (Windows):
+```
+openssl x509 -inform DER -in netskope-root.cer -out netskope-root.crt
+openssl x509 -inform DER -in netskope-intermediate.cer -out netskope-intermediate.crt
+```
+
+Si no existen, el build continúa normal (entornos sin proxy). Estos archivos están en `.gitignore` (no se versionan).

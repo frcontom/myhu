@@ -130,24 +130,24 @@ Si en la red corporativa `docker compose build` falla con `SSLCertVerificationEr
 
 **Solución (en la máquina afectada):**
 
-1. Genera la cadena completa (**hoja + intermedias + RAÍZ**) con el script:
+1. Coloca los **dos certificados** en `backend/ca/` (PEM/CRT):
+   - `netskope-root.crt` (CA raíz: `CN=*.dfw3.goskope.com, O=Netskope Inc.`)
+   - `netskope-intermediate.crt` (CA intermedia: `CN=ca.thomasgreg.goskope.com, O=INVOTECSA`)
+   - Obténlos desde el store de Windows (`certmgr.msc`) o con `scripts\generar_ca.bat`, y conviértelos:
+     ```
+     openssl x509 -inform DER -in netskope-root.cer -out netskope-root.crt
+     openssl x509 -inform DER -in netskope-intermediate.cer -out netskope-intermediate.crt
+     ```
+
+2. Construye **ambas** imágenes (backend + ollama) y levanta:
    ```cmd
-   scripts\generar_ca.bat
-   ```
-   Debe terminar con `Verify return code: 0 (ok)`. Si `openssl` no está en el PATH, el script usa el de Git for Windows.
-
-2. Construye el backend:
-   ```cmd
-   docker compose build --no-cache backend
-   docker compose up -d --build
+   docker compose build --no-cache
+   docker compose up -d
    ```
 
-El `Dockerfile` ya:
-- Instala `backend/ca/corporate-ca-chain.crt` en el trust store (`update-ca-certificates`).
-- Configura `PIP_CERT` para que pip use el bundle del sistema.
-- Si el archivo de CA no existe, el build funciona normal (entornos sin proxy).
+El `Dockerfile` (backend) y el `Dockerfile.ollama` (nuevo) instalan `ca-certificates`, copian `netskope-root.crt` + `netskope-intermediate.crt` a `/usr/local/share/ca-certificates/`, ejecutan `update-ca-certificates`, y configuran `PIP_CERT` (backend) y `SSL_CERT_FILE` (ollama). Si los certificados no existen, el build funciona normal.
 
-> ⚠️ La CA corporativa se ignora en git (`backend/ca/*.crt`): **nunca la versiones**.
+> ⚠️ Las CA corporativas se ignoran en git (`backend/ca/*.crt`): **nunca las versiones**.
 
 ---
 
