@@ -153,7 +153,12 @@ El `Dockerfile` (backend) y el `Dockerfile.ollama` (nuevo) instalan `ca-certific
 
 ## Si la red corporativa bloquea la descarga del modelo (Cloudflare R2)
 
-Si `ollama pull` falla por política corporativa (bloqueo de descarga de blobs en `*.r2.cloudflarestorage.com`), **importa el modelo offline desde un GGUF** (legítimo, sin evadir la política):
+Si `ollama pull` falla por política corporativa (bloqueo de descarga de blobs en `*.r2.cloudflarestorage.com`), el entrypoint de Ollama intenta en orden:
+1. **registry.ollama.ai** (descarga normal).
+2. **HuggingFace** (`hf.co/<OLLAMA_HF_MODEL>`) si registry está bloqueado, y crea el alias con el nombre configurado.
+3. Si ambos están bloqueados, muestra un aviso para **importar el modelo offline desde un GGUF** (legítimo, sin evadir la política):
+
+**Importación offline desde GGUF** (red permitida):
 
 1. **Descarga el GGUF en una red permitida** (HuggingFace):
    - `qwen2.5:7b-instruct` → `Qwen/Qwen2.5-7B-Instruct-GGUF` → `qwen2.5-7b-instruct-q4_k_m.gguf`
