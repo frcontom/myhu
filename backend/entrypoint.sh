@@ -9,7 +9,7 @@ until /bin/ollama list >/dev/null 2>&1; do
 done
 
 MODEL="${OLLAMA_MODEL:-qwen2.5:7b-instruct}"
-HF_MODEL="${OLLAMA_HF_MODEL:-Qwen/Qwen2.5-7B-Instruct-GGUF:q4_K_M}"
+HF_MODEL="${OLLAMA_HF_MODEL:-Qwen/Qwen2.5-7B-Instruct-GGUF:q3_K_M}"
 
 if /bin/ollama list 2>/dev/null | grep -q "^${MODEL}[[:space:]]"; then
   echo "==> Modelo ${MODEL} ya instalado."
