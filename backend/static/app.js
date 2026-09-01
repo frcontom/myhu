@@ -597,7 +597,7 @@ INSTRUCCIONES:
 7. Al final incluye: Cobertura lograda y Riesgos detectados adicionales.
 8. CONSERVA el identificador "## Caso N" y las etiquetas "- HU origen:/- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso. NO cambies el "- HU origen:" de ningún caso.
 9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).
-10. ADEMÁS del texto, ENTREGA el archivo actualizado como adjunto descargable llamado "casos_para_gpt.md" (o ".json") con el JSON de la sección "JSON PARA REIMPORTAR", para que el usuario lo descargue y lo importe directamente sin copiar/pegar.`;
+10. ADEMÁS del texto, ENTREGA el archivo actualizado como adjunto descargable llamado "casos_para_gpt_HU_{{HU_ID}}.md" (o ".json") con el JSON de la sección "JSON PARA REIMPORTAR", para que el usuario lo descargue y lo importe directamente sin copiar/pegar.`;
 
 function flatten(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -684,6 +684,10 @@ function buildExportMd(promptText, quantity) {
   return lines.join("\n");
 }
 
+function currentHuId() {
+  return (state.workItem && state.workItem.id) || (state.testCases[0] && state.testCases[0].work_item_id) || "";
+}
+
 async function exportToGpt() {
   const rawId = $("work-item-id").value.trim();
   if (!state.workItem && rawId) {
@@ -706,6 +710,7 @@ async function exportToGpt() {
   $("gpt-quantity").value = state.testCases.length || Number($("quantity").value) || 5;
   $("gpt-prompt").value = PLANTILLA_GPT;
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{CANTIDAD}}", $("gpt-quantity").value);
+  $("gpt-prompt").value = $("gpt-prompt").value.replace("{{HU_ID}}", currentHuId());
   $("gpt-modal").classList.remove("hidden");
 }
 
@@ -720,12 +725,14 @@ function downloadGptFile() {
     );
   }
   prompt = prompt.replace(/{{CANTIDAD}}/g, String(quantity));
+  prompt = prompt.replace(/{{HU_ID}}/g, currentHuId());
   const md = buildExportMd(prompt, quantity);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
+  const huId = currentHuId();
   const a = document.createElement("a");
   a.href = url;
-  a.download = "casos_para_gpt.md";
+  a.download = huId ? `casos_para_gpt_HU_${huId}.md` : "casos_para_gpt.md";
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
