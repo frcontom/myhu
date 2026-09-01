@@ -277,6 +277,39 @@ def stream_test_cases(
     }
 
 
+def _classify_ollama_error(status: int, body: str) -> str:
+    model = settings.ollama_model
+    if status == 404 and "not found" in body.lower():
+        return (
+            f"El modelo '{model}' NO está instalado en Ollama. "
+            f"Instálalo con: docker exec -it qa-testcase-ollama ollama pull {model}  "
+            f"(o, si la red corporativa lo bloquea, impórtalo desde un GGUF con "
+            f"scripts\\importar_modelo.ps1)."
+        )
+    if body:
+        try:
+            err = json.loads(body).get("error")
+            if err:
+                return f"Ollama respondió HTTP {status}: {err}"
+        except json.JSONDecodeError:
+            pass
+        return f"Ollama respondió HTTP {status}: {body[:200]}"
+    return f"Ollama respondió HTTP {status} (sin detalle)."
+
+
+def _classify_ollama_exception(exc: Exception) -> str:
+    base = settings.ollama_url
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        msg = f"Ollama NO está disponible (no se puede conectar a {base}). Verifica que el contenedor 'qa-testcase-ollama' esté levantado."
+    elif isinstance(exc, httpx.TimeoutException):
+        msg = "Timeout de Ollama. El modelo puede estar cargándose o la generación es muy larga."
+    elif isinstance(exc, httpx.SSLError):
+        msg = f"Error SSL al conectar con Ollama ({base})."
+    else:
+        msg = f"Error de red con Ollama ({base})."
+    return f"{msg} Detalle: {exc}"
+
+
 def _stream_once(
     prompt: str,
     estimated: int,
@@ -307,10 +340,15 @@ def _stream_once(
             timeout=600.0,
         ) as resp:
             if resp.status_code != 200:
+                body = ""
+                try:
+                    body = resp.read().decode("utf-8", "replace")
+                except Exception:
+                    pass
                 yield {
                     "type": "result",
                     "text": None,
-                    "error": f"Ollama respondió HTTP {resp.status_code}",
+                    "error": _classify_ollama_error(resp.status_code, body),
                 }
                 return
 
@@ -349,7 +387,7 @@ def _stream_once(
         yield {
             "type": "result",
             "text": None,
-            "error": f"No se pudo conectar con Ollama ({settings.ollama_url}): {exc}",
+            "error": _classify_ollama_exception(exc),
         }
         return
 

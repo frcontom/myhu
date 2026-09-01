@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     azure_devops_test_plan_id: str = ""
 
     ollama_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen2.5:14b-instruct"
+    ollama_model: str = "qwen2.5:7b-instruct"
     ollama_temperature: float = 0.2
     ollama_max_tokens: int = 8192
 

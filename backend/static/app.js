@@ -919,9 +919,18 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
 (async function init() {
   try {
     const h = await api("/api/health");
-    setChip("chip-ok", h.demo_mode ? "demo" : `ok · ${h.model}`);
-    if (h.demo_mode) {
+    if (h.ollama && h.ollama.available && !h.ollama.model_installed) {
+      setChip("chip-err", "sin modelo");
+      const b = $("demo-banner");
+      b.classList.remove("hidden");
+      b.textContent = `MODO SIN MODELO: Ollama está arriba pero el modelo "${h.model}" no está instalado. ` +
+        `Ejecuta: docker exec -it qa-testcase-ollama ollama pull ${h.model} ` +
+        `(o impórtalo desde un GGUF con scripts\\importar_modelo.ps1)`;
+    } else if (h.demo_mode) {
+      setChip("chip-ok", "demo");
       $("demo-banner").classList.remove("hidden");
+    } else {
+      setChip("chip-ok", `ok · ${h.model}`);
     }
   } catch {
     setChip("chip-err", "sin conexión");

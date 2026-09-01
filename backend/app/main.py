@@ -2,6 +2,7 @@ import json
 import os
 from typing import List, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +13,7 @@ from .config import settings
 from .llm_client import (
     LLMError,
     TestCaseGenerationError,
+    _classify_ollama_exception,
     generate_test_cases,
     steps_to_tcm_html,
     stream_test_cases,
@@ -42,6 +44,21 @@ class CreateRequest(BaseModel):
     test_cases: List[TestCaseModel]
 
 
+def _probe_ollama() -> dict:
+    try:
+        r = httpx.get(f"{settings.ollama_url}/api/tags", timeout=3.0)
+        if r.status_code == 200:
+            models = [m.get("name") for m in r.json().get("models", [])]
+            return {
+                "available": True,
+                "models": models,
+                "model_installed": settings.ollama_model in models,
+            }
+        return {"available": True, "error": f"HTTP {r.status_code}"}
+    except httpx.HTTPError as exc:
+        return {"available": False, "error": _classify_ollama_exception(exc)}
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -50,6 +67,7 @@ def health() -> dict:
         "azure_configured": settings.is_configured,
         "demo_mode": settings.demo_mode,
         "ollama_url": settings.ollama_url,
+        "ollama": _probe_ollama(),
     }
 
 

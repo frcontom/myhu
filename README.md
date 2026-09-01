@@ -151,6 +151,41 @@ El `Dockerfile` ya:
 
 ---
 
+## Si la red corporativa bloquea la descarga del modelo (Cloudflare R2)
+
+Si `ollama pull` falla por política corporativa (bloqueo de descarga de blobs en `*.r2.cloudflarestorage.com`), **importa el modelo offline desde un GGUF** (legítimo, sin evadir la política):
+
+1. **Descarga el GGUF en una red permitida** (HuggingFace):
+   - `qwen2.5:7b-instruct` → `Qwen/Qwen2.5-7B-Instruct-GGUF` → `qwen2.5-7b-instruct-q4_k_m.gguf`
+   - `deepseek-r1:7b` → `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B-GGUF`
+
+2. **Impórtalo con el script:**
+   ```cmd
+   powershell -ExecutionPolicy Bypass -File scripts\importar_modelo.ps1 `
+       -GgufPath "C:\models\qwen2.5-7b-instruct-q4_k_m.gguf" `
+       -ModelName "qwen2.5:7b-instruct"
+   ```
+
+3. El modelo queda en el **volumen persistente** `ollama_data` (no se pierde al reiniciar el contenedor).
+
+4. Reinicia el backend: `docker compose up -d --build`
+
+### Diagnóstico claro de Ollama
+
+El backend ahora distingue estos estados y muestra el mensaje correcto:
+
+| Mensaje del front | Significado | Solución |
+|-------------------|-------------|----------|
+| "El modelo 'X' NO está instalado en Ollama..." | Ollama arriba, modelo ausente | `ollama pull X` o importar GGUF (script) |
+| "Ollama NO está disponible..." | Contenedor `ollama` apagado | `docker compose up -d` |
+| "Timeout de Ollama..." | Modelo cargándose / generación muy larga | Esperar; reducir cantidad de casos |
+| "Error SSL al conectar con Ollama..." | Certificado Netskope no instalado en Ollama | Instalar CA corporativa en el contenedor ollama |
+| "Ollama respondió HTTP {n}: {error}" | Error del endpoint de Ollama | Revisar el error devuelto |
+
+El endpoint `GET /api/health` incluye ahora `ollama: {available, models, model_installed}` para diagnosticar de un vistazo.
+
+---
+
 ## Troubleshooting (si algo falla)
 
 | Síntoma | Causa | Solución |
@@ -162,7 +197,10 @@ El `Dockerfile` ya:
 | "El proyecto 'X' no aparece en la organización" | `AZURE_DEVOPS_PROJECT` mal escrito, o el PAT no cubre esa org/proyecto | Copiar el nombre exacto; en el PAT seleccionar "All accessible organizations" |
 | Sin permisos de Work Items (203/403) | El PAT no tiene `Work Items → Read & Write` | Editar/crear el PAT con ese scope (Paso 3, punto 5) |
 | 404 al leer la HU (`/api/hu/{id}`) | El ID no existe o el PAT no ve ese work item | Verificar el ID real en `/_workitems/edit/<ID>` |
-| `/api/generate` 502 "No se pudo conectar con Ollama" | El modelo no está descargado | `docker exec -it qa-testcase-ollama ollama pull qwen2.5:7b-instruct` |
+| `/api/generate` 502 "No se pudo conectar con Ollama" | El modelo no está descargado | `docker exec -it qa-testcase-ollama ollama pull qwen2.5:7b-instruct` o importar GGUF |
+| "Ollama respondió HTTP 404" | Modelo no instalado en Ollama | `ollama pull qwen2.5:7b-instruct` o `scripts\importar_modelo.ps1` |
+| "Ollama NO está disponible" | Contenedor ollama apagado | `docker compose up -d` |
+| "Timeout de Ollama" | Modelo cargándose o generación muy larga | Esperar / reducir cantidad de casos |
 
 ---
 
