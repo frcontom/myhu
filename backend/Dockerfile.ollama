@@ -17,5 +17,8 @@ RUN if [ -f /ca/netskope-root.crt ]; then \
 # OpenSSL/Go de Ollama usan este bundle del sistema
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-ENTRYPOINT ["/bin/ollama"]
-CMD ["serve"]
+# Auto-descarga del modelo al iniciar (idempotente)
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -23,6 +23,8 @@ services:
     container_name: qa-testcase-ollama
     ports:
       - "11434:11434"
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b-instruct}
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
