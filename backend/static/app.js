@@ -596,7 +596,8 @@ INSTRUCCIONES:
 6. Lenguaje profesional listo para Jira/TestRail.
 7. Al final incluye: Cobertura lograda y Riesgos detectados adicionales.
 8. CONSERVA el identificador "## Caso N" y las etiquetas "- HU origen:/- Título:/- Descripción:/- Prioridad:/- Tipo:/- Precondiciones:/- Criterios que cubre:/- Pasos:" de cada caso. NO cambies el "- HU origen:" de ningún caso.
-9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).`;
+9. Responde el JSON actualizado dentro del bloque \`\`\`json\`\`\` de la sección "JSON PARA REIMPORTAR" (es lo que la herramienta re-importará).
+10. ADEMÁS del texto, ENTREGA el archivo actualizado como adjunto descargable llamado "casos_para_gpt.md" (o ".json") con el JSON de la sección "JSON PARA REIMPORTAR", para que el usuario lo descargue y lo importe directamente sin copiar/pegar.`;
 
 function flatten(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
