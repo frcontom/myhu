@@ -18,7 +18,8 @@ RUN if [ -f /ca/netskope-root.crt ]; then \
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # Auto-descarga del modelo al iniciar (idempotente)
+# sed elimina CRLF por si el archivo se clonó con fin de línea de Windows
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

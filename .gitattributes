@@ -1,0 +1,7 @@
+# Scripts de shell SIEMPRE en LF (evita "exec /entrypoint.sh: no such file or directory" por CRLF)
+*.sh text eol=lf
+
+# Scripts de Windows en CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
