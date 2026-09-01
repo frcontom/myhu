@@ -323,7 +323,7 @@ def _stream_once(
         "options": {
             "temperature": settings.ollama_temperature,
             "num_predict": settings.ollama_max_tokens,
-            "num_ctx": 8192,
+            "num_ctx": settings.ollama_num_ctx,
         },
     }
 

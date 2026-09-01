@@ -12,6 +12,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b-instruct}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0.2}
       - OLLAMA_MAX_TOKENS=${OLLAMA_MAX_TOKENS:-8192}
+      - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-4096}
     depends_on:
       - ollama
     restart: unless-stopped

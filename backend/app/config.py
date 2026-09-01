@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_temperature: float = 0.2
     ollama_max_tokens: int = 8192
+    ollama_num_ctx: int = 4096
 
     @property
     def api_base(self) -> str:
