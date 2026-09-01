@@ -15,7 +15,15 @@ if /bin/ollama list 2>/dev/null | grep -q "^${MODEL}[[:space:]]"; then
   echo "==> Modelo ${MODEL} ya instalado."
 else
   echo "==> Descargando ${MODEL} desde registry.ollama.ai..."
-  if ! /bin/ollama pull "$MODEL"; then
+  # Acota el intento a registry (si la red lo bloquea no se cuelga)
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 90 /bin/ollama pull "$MODEL"
+    REGISTRY_OK=$?
+  else
+    /bin/ollama pull "$MODEL"
+    REGISTRY_OK=$?
+  fi
+  if [ "$REGISTRY_OK" -ne 0 ]; then
     echo "==> registry bloqueado/falló, probando HuggingFace (hf.co/${HF_MODEL})..."
     if /bin/ollama pull "hf.co/${HF_MODEL}"; then
       /bin/ollama create "$MODEL" --from "hf.co/${HF_MODEL}" \
