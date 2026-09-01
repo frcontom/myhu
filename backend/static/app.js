@@ -711,6 +711,7 @@ async function exportToGpt() {
   $("gpt-prompt").value = PLANTILLA_GPT;
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{CANTIDAD}}", $("gpt-quantity").value);
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{HU_ID}}", currentHuId());
+  $("btn-import-gpt-top").classList.remove("hidden");
   $("gpt-modal").classList.remove("hidden");
 }
 
@@ -846,10 +847,15 @@ function importFromGpt() {
       try {
         const cases = parseImportText(String(reader.result));
         if (!cases.length) { alert("No se encontraron casos en el archivo."); return; }
+        const inputId = $("work-item-id").value.trim();
+        const fallbackId = Number(inputId) || (state.workItem && state.workItem.id) || cases[0].work_item_id;
+        cases.forEach((c) => {
+          if (!c.work_item_id) c.work_item_id = fallbackId;
+        });
         state.testCases = cases;
         if (!state.workItem) {
           state.workItem = {
-            id: cases[0].work_item_id,
+            id: cases[0].work_item_id || fallbackId,
             title: "HU importada",
             type: "User Story",
             description: "",
@@ -860,7 +866,7 @@ function importFromGpt() {
           };
         }
         renderResults();
-        alert(`Se importaron ${cases.length} casos. Revisa el editor y luego crea en Azure DevOps.`);
+        alert(`Se importaron ${cases.length} casos (HU #${fallbackId}). Revisa el editor y luego crea en Azure DevOps.`);
       } catch (e) {
         alert("No se pudo importar el archivo: " + e.message);
       }
