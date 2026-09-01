@@ -25,6 +25,8 @@ services:
       - "11434:11434"
     environment:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b-instruct}
+      - OLLAMA_HF_MODEL=${OLLAMA_HF_MODEL:-Qwen/Qwen2.5-7B-Instruct-GGUF:q3_K_M}
+      - OLLAMA_DOWNLOAD_SOURCE=${OLLAMA_DOWNLOAD_SOURCE:-auto}
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
