@@ -36,6 +36,13 @@
             <option value="7">7</option>
           </select>
         </label>
+        <label>
+          Motor de IA
+          <select id="llm-provider">
+            <option value="ollama" selected>Ollama (local)</option>
+            <option value="gemini">Gemini (nube)</option>
+          </select>
+        </label>
         <label class="full">
           Instrucciones para el agente (opcional)
           <textarea id="instructions" rows="2"
@@ -58,7 +65,7 @@
         <button id="btn-test-azure" class="btn btn-ghost">Probar conexión Azure</button>
       </div>
       <p id="azure-test-result" class="hint"></p>
-      <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con el modelo local (Ollama).</p>
+      <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con Ollama (local) o Gemini (nube), según el motor elegido.</p>
     </section>
 
     <section class="card hidden" id="card-hu">

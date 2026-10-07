@@ -28,6 +28,7 @@ class GenerateRequest(BaseModel):
     instructions: str = Field(
         "", description="Instrucciones extra para el agente (tipos, prioridad, enfoque)"
     )
+    provider: str = Field("", description="ollama | gemini (vacío = el de .env)")
 
 
 class TestCaseModel(BaseModel):
@@ -68,6 +69,11 @@ def health() -> dict:
         "demo_mode": settings.demo_mode,
         "ollama_url": settings.ollama_url,
         "ollama": _probe_ollama(),
+        "llm_provider": settings.default_provider,
+        "gemini": {
+            "configured": settings.gemini_configured,
+            "model": settings.gemini_model,
+        },
     }
 
 
@@ -102,6 +108,7 @@ def generate_stream(
     work_item_id: int,
     quantity: int = 5,
     instructions: str = "",
+    provider: str = "",
 ):
     quantity = max(1, min(quantity, 50))
 
@@ -118,7 +125,7 @@ def generate_stream(
                 yield _sse("error", {"detail": str(exc)})
                 return
         try:
-            for ev in stream_test_cases(work_item, quantity, instructions):
+            for ev in stream_test_cases(work_item, quantity, instructions, provider):
                 if ev["type"] == "done":
                     ev["data"]["work_item"] = work_item
                 yield _sse(ev["type"], ev["data"])
@@ -144,7 +151,9 @@ def generate(req: GenerateRequest) -> dict:
         pass  # aceptamos cualquier tipo por flexibilidad
 
     try:
-        result = generate_test_cases(work_item, req.quantity, req.instructions)
+        result = generate_test_cases(
+            work_item, req.quantity, req.instructions, req.provider
+        )
     except (LLMError, TestCaseGenerationError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -18,6 +18,22 @@ class Settings(BaseSettings):
     ollama_max_tokens: int = 8192
     ollama_num_ctx: int = 4096
 
+    llm_provider: str = "ollama"
+    gemini_api_key: str = ""
+    gemini_url: str = "https://generativelanguage.googleapis.com"
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_temperature: float = 0.2
+    gemini_max_tokens: int = 8192
+
+    @property
+    def gemini_configured(self) -> bool:
+        return bool((self.gemini_api_key or "").strip())
+
+    @property
+    def default_provider(self) -> str:
+        provider = (self.llm_provider or "ollama").strip().lower()
+        return provider if provider in ("ollama", "gemini") else "ollama"
+
     @property
     def api_base(self) -> str:
         if self.azure_devops_url:

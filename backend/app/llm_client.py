@@ -165,12 +165,25 @@ Tipo: {work_item.get('type')}
 """.strip()
 
 
+def _resolve_provider(provider: Optional[str]) -> str:
+    resolved = (provider or "").strip().lower() or settings.default_provider
+    if resolved not in ("ollama", "gemini"):
+        resolved = settings.default_provider
+    if resolved == "gemini" and not settings.gemini_configured:
+        raise LLMError(
+            "Gemini no está configurado: agrega GEMINI_API_KEY=<tu key> en el archivo .env "
+            "(API key de https://aistudio.google.com/apikey) y reinicia con: docker compose up -d"
+        )
+    return resolved
+
+
 def generate_test_cases(
     work_item: Dict[str, Any],
     quantity: int,
     instructions: str,
+    provider: Optional[str] = None,
 ) -> Dict[str, Any]:
-    events = list(stream_test_cases(work_item, quantity, instructions))
+    events = list(stream_test_cases(work_item, quantity, instructions, provider))
     done = next((ev["data"] for ev in events if ev["type"] == "done"), None)
     if done is None:
         error = next((ev["data"].get("detail") for ev in events if ev["type"] == "error"), None)
@@ -182,10 +195,22 @@ def stream_test_cases(
     work_item: Dict[str, Any],
     quantity: int,
     instructions: str,
+    provider: Optional[str] = None,
 ) -> Iterator[Dict[str, Any]]:
+    try:
+        resolved = _resolve_provider(provider)
+    except LLMError as exc:
+        yield {"type": "error", "data": {"detail": str(exc)}}
+        return
+
+    max_tokens = (
+        settings.gemini_max_tokens if resolved == "gemini" else settings.ollama_max_tokens
+    )
+    streamer = _stream_once_gemini if resolved == "gemini" else _stream_once
+
     prompt = build_prompt(work_item, quantity, instructions)
-    estimated = min(quantity * AVG_TOKENS_PER_CASE, settings.ollama_max_tokens)
-    yield {"type": "start", "data": {"estimated_tokens": estimated}}
+    estimated = min(quantity * AVG_TOKENS_PER_CASE, max_tokens)
+    yield {"type": "start", "data": {"estimated_tokens": estimated, "provider": resolved}}
 
     cases: List[Dict[str, Any]] = []
     summary = ""
@@ -194,7 +219,7 @@ def stream_test_cases(
     for attempt in range(1, 3):
         last_text = None
         error = None
-        for event in _stream_once(current_prompt, estimated):
+        for event in streamer(current_prompt, estimated):
             if event["type"] == "result":
                 last_text = event["text"]
                 error = event["error"]
@@ -234,7 +259,7 @@ def stream_test_cases(
             f"Genera EXACTAMENTE {missing} casos adicionales (numerados TC-{len(cases) + 1:03d} en adelante). "
             "Devuelve únicamente el JSON con esos casos adicionales."
         )
-        estimated = min(max(missing, 1) * AVG_TOKENS_PER_CASE, settings.ollama_max_tokens)
+        estimated = min(max(missing, 1) * AVG_TOKENS_PER_CASE, max_tokens)
         yield {
             "type": "progress",
             "data": {
@@ -388,6 +413,155 @@ def _stream_once(
             "type": "result",
             "text": None,
             "error": _classify_ollama_exception(exc),
+        }
+        return
+
+    yield {"type": "result", "text": buf, "error": None}
+
+
+def _classify_gemini_error(status: int, body: str) -> str:
+    model = settings.gemini_model
+    msg = ""
+    if body:
+        try:
+            msg = (json.loads(body).get("error") or {}).get("message") or ""
+        except json.JSONDecodeError:
+            msg = body[:200]
+    lowered = msg.lower()
+    if status in (400, 403) and ("api key" in lowered or "api_key" in lowered or "permission" in lowered):
+        return (
+            f"Gemini rechazó la API key (HTTP {status}): {msg[:200]} "
+            f"Revisa GEMINI_API_KEY en .env (https://aistudio.google.com/apikey)."
+        )
+    if status == 404:
+        return (
+            f"El modelo '{model}' no existe o no está disponible para tu cuenta (HTTP 404): "
+            f"{msg[:200]} Revisa GEMINI_MODEL en .env."
+        )
+    if status == 429:
+        return (
+            f"Gemini alcanzó su límite de cuota (HTTP 429): {msg[:200]} "
+            f"Espera unos minutos o revisa tu plan en AI Studio."
+        )
+    if msg:
+        return f"Gemini respondió HTTP {status}: {msg[:200]}"
+    return f"Gemini respondió HTTP {status} (sin detalle)."
+
+
+def _classify_gemini_exception(exc: Exception) -> str:
+    base = settings.gemini_url
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        msg = f"No se puede conectar con Gemini ({base}). Verifica la red o el proxy corporativo."
+    elif isinstance(exc, httpx.TimeoutException):
+        msg = "Timeout con Gemini. La generación es muy larga o la API está lenta."
+    elif isinstance(exc, httpx.SSLError):
+        msg = f"Error SSL al conectar con Gemini ({base}). Podría ser inspección TLS (Netskope)."
+    else:
+        msg = f"Error de red con Gemini ({base})."
+    return f"{msg} Detalle: {exc}"
+
+
+def _stream_once_gemini(
+    prompt: str,
+    estimated: int,
+) -> Iterator[Dict[str, Any]]:
+    url = (
+        f"{settings.gemini_url.rstrip('/')}/models/{settings.gemini_model}"
+        f":streamGenerateContent?alt=sse"
+    )
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": settings.gemini_temperature,
+            "maxOutputTokens": settings.gemini_max_tokens,
+            "responseMimeType": "application/json",
+        },
+    }
+    headers = {
+        "x-goog-api-key": settings.gemini_api_key,
+        "Content-Type": "application/json",
+    }
+
+    buf = ""
+    token_count = 0
+    start = time.time()
+    last_yield = 0.0
+
+    try:
+        with httpx.stream(
+            "POST",
+            url,
+            json=payload,
+            headers=headers,
+            timeout=600.0,
+        ) as resp:
+            if resp.status_code != 200:
+                body = ""
+                try:
+                    body = resp.read().decode("utf-8", "replace")
+                except Exception:
+                    pass
+                yield {
+                    "type": "result",
+                    "text": None,
+                    "error": _classify_gemini_error(resp.status_code, body),
+                }
+                return
+
+            for line in resp.iter_lines():
+                line = (line or "").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+
+                candidates = chunk.get("candidates") or []
+                parts = (
+                    (candidates[0].get("content") or {}).get("parts") or []
+                    if candidates
+                    else []
+                )
+                token = "".join(
+                    str(p.get("text") or "") for p in parts if not p.get("thought")
+                )
+                if token:
+                    buf += token
+                    token_count = max(token_count, len(buf) // 4)
+
+                usage = chunk.get("usageMetadata") or {}
+                if usage.get("candidatesTokenCount"):
+                    token_count = max(token_count, int(usage["candidatesTokenCount"]))
+
+                finished = any(c.get("finishReason") for c in candidates)
+                if finished:
+                    break
+
+                now = time.time()
+                if now - last_yield >= 0.25:
+                    last_yield = now
+                    elapsed = now - start
+                    tps = round(token_count / elapsed, 1) if elapsed > 0 else 0.0
+                    percent = min(int(token_count / estimated * 100), 99)
+                    yield {
+                        "type": "progress",
+                        "data": {
+                            "tokens": token_count,
+                            "elapsed": round(elapsed, 1),
+                            "tokens_per_sec": tps,
+                            "percent": percent,
+                            "estimated": estimated,
+                        },
+                    }
+    except httpx.HTTPError as exc:
+        yield {
+            "type": "result",
+            "text": None,
+            "error": _classify_gemini_exception(exc),
         }
         return
 

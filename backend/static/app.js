@@ -366,6 +366,8 @@ async function generate() {
   const ids = [...new Set(raw.split(/[\s,;]+/).filter(Boolean))].slice(0, 20);
   const quantity = Number($("quantity").value) || 5;
   const instructions = $("instructions").value.trim();
+  const provider = $("llm-provider").value;
+  const providerLabel = provider === "gemini" ? "Gemini (nube)" : "el modelo local (Ollama)";
 
   state = { workItem: null, testCases: [], huMap: {} };
   cancelRequested = false;
