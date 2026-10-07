@@ -12,7 +12,7 @@ Todo corre en local con Docker Compose. Sin Node, sin base de datos, sin servici
 
 - **Backend:** Python 3.12 + FastAPI + httpx + pydantic-settings
 - **Frontend:** HTML/CSS/JS vanilla servido por FastAPI (sin build)
-- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto
+- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto **o Gemini en la nube** (`GEMINI_API_KEY` en `.env`, modelo default `gemini-3.8-flash`, selector "Motor de IA" en el front)
 - **Azure DevOps:** REST API `api-version=7.1`, autenticación con PAT (Basic auth)
 
 ## Cómo correr el proyecto
@@ -59,7 +59,7 @@ azureDevops/
 1. **Front** (`app.js`) envía `POST /api/generate` con `{work_item_id, quantity, instructions}`.
 2. **Backend** (`azure_client.get_work_item`) consulta la HU en Azure DevOps: `GET .../_apis/wit/workitems/{id}?api-version=7.1&$expand=Relations`.
 3. `llm_client.build_prompt` arma el prompt (español) con título, descripción y criterios de aceptación de la HU + las instrucciones del QA.
-4. `llm_client.generate_test_cases` llama a Ollama (`POST {ollama_url}/api/generate`) con `format="json"` y parsea la respuesta (robusto: tolera markdown o JSON embebido).
+4. `llm_client.generate_test_cases` llama al proveedor elegido: Ollama (`POST {ollama_url}/api/generate`, `format="json"`) o Gemini (`POST {gemini_url}/models/{gemini_model}:streamGenerateContent?alt=sse`, header `x-goog-api-key`, `responseMimeType: application/json`); parsea la respuesta (robusto: tolera markdown o JSON embebido).
 5. El front muestra los casos en una tabla **editable** (título, prioridad, tipo, precondiciones, pasos).
 6. **Front** envía `POST /api/create` con `{work_item_id, test_cases[]}`.
 7. `azure_client.create_test_case` crea cada work item `$Test Case` con `Microsoft.VSTS.TCM.Steps` (HTML) y una relación `Microsoft.VSTS.Common.Tests` hacia la HU.
@@ -69,7 +69,7 @@ azureDevops/
 | GET | `/api/health` | Estado, modelo, `azure_configured`, `demo_mode` |
 | GET | `/api/test-azure` | Valida org + PAT + proyecto + permisos Work Items (botón "Probar conexión Azure") |
 | GET | `/api/hu/{id}` | HU normalizada (incluye `criteria_list`) |
-| GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo) |
+| GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo; `?provider=ollama\|gemini`) |
 | POST | `/api/generate` | Generación bloqueante |
 | POST | `/api/create` | Crea Test Cases en Azure enlazados a la HU |
 
@@ -95,6 +95,7 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual y NO toca Oll
 - **`azure_client.py:86`**: la URL del work item es `/_apis/wit/workItems/{id}` y el POST va a `/wit/workitems/$Test Case` (con `$` URL-encoded). El `$` en la ruta debe escribirse `$Test Case`; httpx lo codifica.
 - **`azure_client.py:79`**: la relación usa `rel: "Microsoft.VSTS.Common.TestedBy-Reverse"`. ⚠️ Es el nombre **direccional** que Azure acepta para el enlace "Tests"/"Tested by" (el caso queda en la pestaña "Tested by" de la HU). Los nombres base `Microsoft.VSTS.Common.Tests` / `Microsoft.VSTS.Common.TestedBy` dan 400 "Unknown relation type"; `System.LinkTypes.Related` siempre funciona pero no es "Tested by".
 - **`llm_client.py`**: `format="json"` en Ollama fuerza JSON, pero igual se normaliza con `_parse_json` y `_normalize_case`. Nunca confiar en que el modelo devuelva JSON perfecto.
+- **`llm_client.py` `_resolve_provider`**: el proveedor llega por request (`?provider=`/`provider` en JSON) o por `LLM_PROVIDER` del `.env`. Si es `gemini` sin `GEMINI_API_KEY` devuelve un error legible. La key NUNCA se loguea ni se expone en `/api/health` (solo `configured: true/false`).
 - **`llm_client.py` `steps_to_tcm_html`**: el formato que la org del usuario reconoce es `<step type="ValidateStep">` con **DOS** `<parameterizedString>` (acción + esperado), `last="{len(steps)*2}"` y escapado HTML. ⚠️ El formato estándar `Action`/`ExpectedResult` NO renderiza el editor de pasos en esta org.
 - **`Dockerfile` y `Dockerfile.ollama`**: soporte de CA corporativa (Netskope). Copian `backend/ca/netskope-root.crt` + `netskope-intermediate.crt` → `/usr/local/share/ca-certificates/` + `update-ca-certificates`; `PIP_CERT` (backend) y `SSL_CERT_FILE` (ollama). Si no existen, build normal. `docker-compose.yml` construye ollama desde `backend/Dockerfile.ollama`. Scripts en `scripts/generar_ca.bat|ps1` y `scripts/importar_modelo.ps1`.
 - **`main.py:108`**: `StaticFiles(html=True)` montado en `/`; las rutas `/api/*` se registran ANTES para que el mount no las intercepte.
