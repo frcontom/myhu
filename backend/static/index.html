@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=29" />
+  <link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body>
   <header class="topbar">
@@ -83,11 +83,11 @@
       <div id="coverage" class="coverage"></div>
       <div id="cases-container"></div>
       <div class="actions">
-        <button id="btn-add-case" class="btn btn-secondary">+ Agregar Test Case manual</button>
-        <button id="btn-export-gpt" class="btn btn-secondary">Pasar a GPT (descargar)</button>
+        <button id="btn-add-case" class="btn btn-secondary" title="Agregar Test Case manual">+ Agregar caso manual</button>
+        <button id="btn-export-gpt" class="btn btn-secondary" title="Descargar archivo para mejorar en ChatGPT">Pasar a GPT</button>
         <button id="btn-export-csv" class="btn btn-secondary">Exportar CSV</button>
         <button id="btn-import-gpt" class="btn btn-secondary">Importar mejora de GPT</button>
-        <button id="btn-create" class="btn btn-success">Crear en Azure DevOps (enlazados a la HU)</button>
+        <button id="btn-create" class="btn btn-success" title="Crea los Test Cases enlazados a la HU (pestaña Tested by)">Crear en Azure DevOps</button>
         <button id="btn-reset" class="btn btn-ghost">Limpiar</button>
       </div>
       <div id="create-preview" class="preview hidden"></div>
@@ -122,6 +122,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

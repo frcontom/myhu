@@ -237,6 +237,19 @@ textarea { resize: vertical; }
   flex-wrap: wrap;
 }
 
+#card-results .actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  align-items: center;
+}
+
+#card-results .actions .btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .btn {
   border: none;
   border-radius: 8px;
