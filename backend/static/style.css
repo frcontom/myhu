@@ -104,6 +104,20 @@ main {
 
 .grid-form .full { grid-column: 1 / -1; }
 
+.mini-fields {
+  display: flex;
+  gap: 10px;
+}
+
+.mini-fields label {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-fields select {
+  width: 100%;
+}
+
 label {
   display: flex;
   flex-direction: column;

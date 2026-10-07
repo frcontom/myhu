@@ -632,6 +632,10 @@ function buildExportMd(promptText, quantity) {
   lines.push(`- Cantidad total de casos de prueba esperados al final: ${quantity}`);
   lines.push("- Cubrir TODOS los criterios de aceptación de la HU.");
   lines.push("- Mejorar los casos locales y añadir los que falten.");
+  const qaInstr = $("instructions").value.trim();
+  if (qaInstr) {
+    lines.push(`- Instrucciones del QA (OBLIGATORIAS): ${flatten(qaInstr)}`);
+  }
   lines.push("");
   lines.push("# CASOS DE PRUEBA");
   if (!state.testCases.length) {
@@ -710,7 +714,12 @@ async function exportToGpt() {
     return;
   }
   $("gpt-quantity").value = state.testCases.length || Number($("quantity").value) || 5;
-  $("gpt-prompt").value = PLANTILLA_GPT;
+  let basePrompt = PLANTILLA_GPT;
+  const qaInstr = $("instructions").value.trim();
+  if (qaInstr) {
+    basePrompt += `\n\n## INSTRUCCIONES DEL QA (obligatorias para cada caso)\n${qaInstr}`;
+  }
+  $("gpt-prompt").value = basePrompt;
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{CANTIDAD}}", $("gpt-quantity").value);
   $("gpt-prompt").value = $("gpt-prompt").value.replace("{{HU_ID}}", currentHuId());
   $("btn-import-gpt-top").classList.remove("hidden");

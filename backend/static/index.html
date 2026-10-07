@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=27" />
+  <link rel="stylesheet" href="style.css?v=28" />
 </head>
 <body>
   <header class="topbar">
@@ -24,25 +24,27 @@
           ID de la Historia de Usuario (puedes poner varios: 123, 456, 789)
           <input type="text" id="work-item-id" placeholder="ej. 12345 o 123, 456" required />
         </label>
-        <label>
-          Cantidad de casos
-          <select id="quantity">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-          </select>
-        </label>
-        <label>
-          Motor de IA
-          <select id="llm-provider">
-            <option value="ollama" selected>Ollama (local)</option>
-            <option value="gemini">Gemini (nube)</option>
-          </select>
-        </label>
+        <div class="mini-fields">
+          <label>
+            Cantidad de casos
+            <select id="quantity">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5" selected>5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+          </label>
+          <label>
+            Motor de IA
+            <select id="llm-provider">
+              <option value="ollama" selected>Ollama (local)</option>
+              <option value="gemini">Gemini (nube)</option>
+            </select>
+          </label>
+        </div>
         <label class="full">
           Instrucciones para el agente (opcional)
           <textarea id="instructions" rows="2"
@@ -118,6 +120,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>
