@@ -419,8 +419,8 @@ def _stream_once(
     yield {"type": "result", "text": buf, "error": None}
 
 
-def _classify_gemini_error(status: int, body: str) -> str:
-    model = settings.gemini_model
+def _classify_gemini_error(status: int, body: str, model: str = "") -> str:
+    model = model or settings.gemini_model
     msg = ""
     if body:
         try:
@@ -445,7 +445,7 @@ def _classify_gemini_error(status: int, body: str) -> str:
         )
     if msg:
         return f"Gemini respondió HTTP {status}: {msg[:200]}"
-    return f"Gemini respondió HTTP {status} (sin detalle)."
+    return f"Gemini respondió HTTP {status}: {(body[:200] or 'sin detalle').strip()}"
 
 
 def _classify_gemini_exception(exc: Exception) -> str:
@@ -461,111 +461,155 @@ def _classify_gemini_exception(exc: Exception) -> str:
     return f"{msg} Detalle: {exc}"
 
 
+GEMINI_RETRY_STATUSES = (429, 500, 502, 503, 504)
+
+
+def _gemini_model_chain() -> List[str]:
+    chain = [settings.gemini_model]
+    for extra in (settings.gemini_fallback_models or "").split(","):
+        name = extra.strip()
+        if name and name not in chain:
+            chain.append(name)
+    return chain
+
+
 def _stream_once_gemini(
     prompt: str,
     estimated: int,
 ) -> Iterator[Dict[str, Any]]:
-    url = (
-        f"{settings.gemini_url.rstrip('/')}/models/{settings.gemini_model}"
-        f":streamGenerateContent?alt=sse"
-    )
-    payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": settings.gemini_temperature,
-            "maxOutputTokens": settings.gemini_max_tokens,
-            "responseMimeType": "application/json",
-        },
-    }
     headers = {
         "x-goog-api-key": settings.gemini_api_key,
         "Content-Type": "application/json",
     }
+    plan: List[Any] = []
+    for mi, model in enumerate(_gemini_model_chain()):
+        for attempt in ((1, 2) if mi == 0 else (1,)):
+            plan.append((model, attempt))
 
-    buf = ""
-    token_count = 0
-    start = time.time()
-    last_yield = 0.0
+    last_error = "Gemini no respondió."
 
-    try:
-        with httpx.stream(
-            "POST",
-            url,
-            json=payload,
-            headers=headers,
-            timeout=600.0,
-        ) as resp:
-            if resp.status_code != 200:
-                body = ""
-                try:
-                    body = resp.read().decode("utf-8", "replace")
-                except Exception:
-                    pass
-                yield {
-                    "type": "result",
-                    "text": None,
-                    "error": _classify_gemini_error(resp.status_code, body),
-                }
-                return
+    for idx, (model, attempt) in enumerate(plan):
+        if idx > 0:
+            note = (
+                f"Gemini sin respuesta, reintento 2/2 con {model}…"
+                if attempt > 1
+                else f"Pruebo modelo alternativo: {model}…"
+            )
+            yield {
+                "type": "progress",
+                "data": {
+                    "tokens": 0,
+                    "elapsed": 0.0,
+                    "tokens_per_sec": 0.0,
+                    "percent": 0,
+                    "estimated": estimated,
+                    "note": note,
+                },
+            }
+            time.sleep(3)
 
-            for line in resp.iter_lines():
-                line = (line or "").strip()
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if not data or data == "[DONE]":
-                    continue
-                try:
-                    chunk = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-
-                candidates = chunk.get("candidates") or []
-                parts = (
-                    (candidates[0].get("content") or {}).get("parts") or []
-                    if candidates
-                    else []
-                )
-                token = "".join(
-                    str(p.get("text") or "") for p in parts if not p.get("thought")
-                )
-                if token:
-                    buf += token
-                    token_count = max(token_count, len(buf) // 4)
-
-                usage = chunk.get("usageMetadata") or {}
-                if usage.get("candidatesTokenCount"):
-                    token_count = max(token_count, int(usage["candidatesTokenCount"]))
-
-                finished = any(c.get("finishReason") for c in candidates)
-                if finished:
-                    break
-
-                now = time.time()
-                if now - last_yield >= 0.25:
-                    last_yield = now
-                    elapsed = now - start
-                    tps = round(token_count / elapsed, 1) if elapsed > 0 else 0.0
-                    percent = min(int(token_count / estimated * 100), 99)
-                    yield {
-                        "type": "progress",
-                        "data": {
-                            "tokens": token_count,
-                            "elapsed": round(elapsed, 1),
-                            "tokens_per_sec": tps,
-                            "percent": percent,
-                            "estimated": estimated,
-                        },
-                    }
-    except httpx.HTTPError as exc:
-        yield {
-            "type": "result",
-            "text": None,
-            "error": _classify_gemini_exception(exc),
+        url = (
+            f"{settings.gemini_url.rstrip('/')}/v1beta/models/{model}"
+            f":streamGenerateContent?alt=sse"
+        )
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": settings.gemini_temperature,
+                "maxOutputTokens": settings.gemini_max_tokens,
+                "responseMimeType": "application/json",
+            },
         }
-        return
 
-    yield {"type": "result", "text": buf, "error": None}
+        buf = ""
+        token_count = 0
+        start = time.time()
+        last_yield = 0.0
+
+        try:
+            with httpx.stream(
+                "POST",
+                url,
+                json=payload,
+                headers=headers,
+                timeout=httpx.Timeout(600.0, connect=15.0),
+            ) as resp:
+                if resp.status_code != 200:
+                    body = ""
+                    try:
+                        body = resp.read().decode("utf-8", "replace")
+                    except Exception:
+                        pass
+                    last_error = _classify_gemini_error(resp.status_code, body, model)
+                    if (
+                        resp.status_code not in GEMINI_RETRY_STATUSES
+                        and resp.status_code != 404
+                    ):
+                        yield {"type": "result", "text": None, "error": last_error}
+                        return
+                else:
+                    for line in resp.iter_lines():
+                        line = (line or "").strip()
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+
+                        candidates = chunk.get("candidates") or []
+                        parts = (
+                            (candidates[0].get("content") or {}).get("parts") or []
+                            if candidates
+                            else []
+                        )
+                        token = "".join(
+                            str(p.get("text") or "")
+                            for p in parts
+                            if not p.get("thought")
+                        )
+                        if token:
+                            buf += token
+                            token_count = max(token_count, len(buf) // 4)
+
+                        usage = chunk.get("usageMetadata") or {}
+                        if usage.get("candidatesTokenCount"):
+                            token_count = max(
+                                token_count, int(usage["candidatesTokenCount"])
+                            )
+
+                        finished = any(c.get("finishReason") for c in candidates)
+                        if finished:
+                            break
+
+                        now = time.time()
+                        if now - last_yield >= 0.25:
+                            last_yield = now
+                            elapsed = now - start
+                            tps = round(token_count / elapsed, 1) if elapsed > 0 else 0.0
+                            percent = min(int(token_count / estimated * 100), 99)
+                            yield {
+                                "type": "progress",
+                                "data": {
+                                    "tokens": token_count,
+                                    "elapsed": round(elapsed, 1),
+                                    "tokens_per_sec": tps,
+                                    "percent": percent,
+                                    "estimated": estimated,
+                                },
+                            }
+
+                    if buf.strip():
+                        yield {"type": "result", "text": buf, "error": None}
+                        return
+                    last_error = "Gemini devolvió una respuesta vacía."
+        except httpx.HTTPError as exc:
+            last_error = _classify_gemini_exception(exc)
+
+    yield {"type": "result", "text": None, "error": last_error}
 
 
 def _parse_json(text: str) -> Any:

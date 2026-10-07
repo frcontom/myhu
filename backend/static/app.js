@@ -422,7 +422,7 @@ function streamOne(id, quantity, instructions) {
       const d = JSON.parse(e.data);
       setProgress(
         d.percent,
-        `HU #${id} · Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
+        d.note || `HU #${id} · Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
       );
     });
 

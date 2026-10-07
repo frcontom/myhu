@@ -12,7 +12,7 @@ Todo corre en local con Docker Compose. Sin Node, sin base de datos, sin servici
 
 - **Backend:** Python 3.12 + FastAPI + httpx + pydantic-settings
 - **Frontend:** HTML/CSS/JS vanilla servido por FastAPI (sin build)
-- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto **o Gemini en la nube** (`GEMINI_API_KEY` en `.env`, modelo default `gemini-3.8-flash`, selector "Motor de IA" en el front)
+- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto **o Gemini en la nube** (`GEMINI_API_KEY` en `.env`, modelo default `gemini-3.7-flash` con cadena de respaldo `GEMINI_FALLBACK_MODELS` contra los 503 de Google, selector "Motor de IA" en el front)
 - **Azure DevOps:** REST API `api-version=7.1`, autenticación con PAT (Basic auth)
 
 ## Cómo correr el proyecto

@@ -15,9 +15,10 @@ services:
       - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-4096}
       - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.7-flash}
+      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-3.5-flash,gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite}
       - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
-      - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-8192}
+      - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-16384}
     depends_on:
       - ollama
     restart: unless-stopped
