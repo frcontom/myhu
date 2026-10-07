@@ -157,6 +157,83 @@ class AzureDevOpsClient:
     def get_work_item_url(self, work_item_id: int) -> str:
         return f"{settings.api_base}/{self._project}/_apis/wit/workItems/{work_item_id}"
 
+    def list_test_cases_for_hu(self, hu_id: int) -> List[Dict[str, Any]]:
+        resp = self._get(
+            f"/wit/workitems/{hu_id}",
+            {"api-version": "7.1", "$expand": "Relations"},
+        )
+        ids: List[str] = []
+        for rel in resp.json().get("relations") or []:
+            if "test" not in (rel.get("rel") or "").lower():
+                continue
+            match = re.search(r"/workitems/(\d+)$", rel.get("url") or "", re.IGNORECASE)
+            if match and match.group(1) != str(hu_id) and match.group(1) not in ids:
+                ids.append(match.group(1))
+        if not ids:
+            return []
+        batch = httpx.get(
+            self._url("/wit/workitems"),
+            params={
+                "ids": ",".join(ids),
+                "fields": "System.Title,Microsoft.VSTS.Common.Priority",
+                "api-version": "7.1",
+            },
+            headers=self._auth,
+            timeout=30.0,
+        )
+        if batch.status_code != 200:
+            raise AzureDevOpsError(
+                f"Azure DevOps GET test cases de HU {hu_id} -> HTTP {batch.status_code}: "
+                f"{batch.text[:300]}"
+            )
+        return [
+            {
+                "id": item.get("id"),
+                "title": item.get("fields", {}).get("System.Title", ""),
+                "priority": item.get("fields", {}).get("Microsoft.VSTS.Common.Priority"),
+            }
+            for item in batch.json().get("value", [])
+        ]
+
+    def update_test_case(
+        self,
+        test_case_id: int,
+        title: str,
+        description: str,
+        steps_html: str,
+        priority: int = 2,
+        preconditions: str = "",
+    ) -> Dict[str, Any]:
+        fields: Dict[str, Any] = {"/fields/System.Title": title}
+        if description:
+            fields["/fields/System.Description"] = description
+        if priority:
+            fields["/fields/Microsoft.VSTS.Common.Priority"] = priority
+        if preconditions:
+            fields["/fields/Custom.Preconditions"] = preconditions
+        if steps_html:
+            fields["/fields/Microsoft.VSTS.TCM.Steps"] = steps_html
+
+        patch = [{"op": "add", "path": path, "value": value} for path, value in fields.items()]
+        resp = httpx.patch(
+            self._url(f"/wit/workitems/{test_case_id}"),
+            params={"api-version": "7.1"},
+            headers={**self._auth, "Content-Type": "application-patch+json"},
+            json=patch,
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise AzureDevOpsError(
+                f"Azure DevOps update Test Case {test_case_id} -> HTTP {resp.status_code}: "
+                f"{resp.text[:500]}"
+            )
+        data = resp.json()
+        return {
+            "id": data.get("id"),
+            "url": data.get("url"),
+            "title": data.get("fields", {}).get("System.Title"),
+        }
+
     def _test_headers(self) -> Dict[str, str]:
         return {**self._auth, "Content-Type": "application/json"}
 

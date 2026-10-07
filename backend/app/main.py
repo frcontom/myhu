@@ -38,6 +38,7 @@ class TestCaseModel(BaseModel):
     type: str
     preconditions: str
     steps: List[dict]
+    existing_id: Optional[int] = None
 
 
 class CreateRequest(BaseModel):
@@ -160,8 +161,52 @@ def generate(req: GenerateRequest) -> dict:
     return {"work_item": work_item, **result}
 
 
+@app.get("/api/existing-testcases")
+def existing_testcases(work_item_id: int) -> dict:
+    if settings.demo_mode:
+        return {"hu_id": work_item_id, "items": [], "demo": True}
+    if not settings.is_configured:
+        raise HTTPException(status_code=400, detail="Configura AZURE_DEVOPS_* en el archivo .env")
+    try:
+        items = azure_client.list_test_cases_for_hu(work_item_id)
+    except AzureDevOpsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"hu_id": work_item_id, "items": items}
+
+
+def _validate_cases(test_cases: List[TestCaseModel]) -> List[str]:
+    problems: List[str] = []
+    for i, tc in enumerate(test_cases, 1):
+        errs: List[str] = []
+        title = (tc.title or "").strip()
+        if not title:
+            errs.append("título vacío")
+        elif len(title) > 255:
+            errs.append(f"título demasiado largo ({len(title)} > 255)")
+        if tc.priority not in (1, 2, 3, 4):
+            errs.append(f"prioridad {tc.priority} inválida (usa 1-4)")
+        steps = tc.steps or []
+        if not steps:
+            errs.append("sin pasos")
+        for j, step in enumerate(steps, 1):
+            if not str(step.get("action") or "").strip():
+                errs.append(f"paso {j} sin acción")
+            if not str(step.get("expected") or "").strip():
+                errs.append(f"paso {j} sin resultado esperado")
+        if errs:
+            problems.append(f"Caso {i} ({title or 'sin título'}): " + ", ".join(errs))
+    return problems
+
+
 @app.post("/api/create")
 def create(req: CreateRequest) -> dict:
+    problems = _validate_cases(req.test_cases)
+    if problems:
+        raise HTTPException(
+            status_code=400,
+            detail="Validación fallida — no se creó nada. " + " | ".join(problems),
+        )
+
     if settings.demo_mode:
         created = [
             {
@@ -173,6 +218,7 @@ def create(req: CreateRequest) -> dict:
         ]
         return {
             "created": created,
+            "updated": [],
             "count": len(created),
             "linked_to_work_item": req.work_item_id,
             "demo": True,
@@ -182,6 +228,7 @@ def create(req: CreateRequest) -> dict:
         raise HTTPException(status_code=400, detail="Configura AZURE_DEVOPS_* en el archivo .env")
 
     created = []
+    updated = []
     iteration_path = ""
     area_path = ""
     if not settings.demo_mode:
@@ -197,19 +244,30 @@ def create(req: CreateRequest) -> dict:
             [{"action": s.get("action", ""), "expected": s.get("expected", "")} for s in tc.steps]
         )
         try:
-            item = azure_client.create_test_case(
-                title=tc.title,
-                description=tc.description,
-                steps_html=steps_html,
-                user_story_id=req.work_item_id,
-                priority=tc.priority,
-                preconditions=tc.preconditions,
-                iteration_path=iteration_path,
-                area_path=area_path,
-            )
-            created.append(item)
+            if tc.existing_id:
+                item = azure_client.update_test_case(
+                    tc.existing_id,
+                    title=tc.title,
+                    description=tc.description,
+                    steps_html=steps_html,
+                    priority=tc.priority,
+                    preconditions=tc.preconditions,
+                )
+                updated.append(item)
+            else:
+                item = azure_client.create_test_case(
+                    title=tc.title,
+                    description=tc.description,
+                    steps_html=steps_html,
+                    user_story_id=req.work_item_id,
+                    priority=tc.priority,
+                    preconditions=tc.preconditions,
+                    iteration_path=iteration_path,
+                    area_path=area_path,
+                )
+                created.append(item)
         except AzureDevOpsError as exc:
-            return {"created": created, "error": str(exc)}
+            return {"created": created, "updated": updated, "error": str(exc)}
 
     publish = None
     if created and settings.azure_devops_test_plan_id:
@@ -229,6 +287,7 @@ def create(req: CreateRequest) -> dict:
 
     return {
         "created": created,
+        "updated": updated,
         "count": len(created),
         "linked_to_work_item": req.work_item_id,
         "publish": publish,

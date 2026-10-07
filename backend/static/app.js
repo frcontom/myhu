@@ -9,6 +9,7 @@ let state = {
 let dragState = null;
 let cancelRequested = false;
 let activeStream = null;
+let createPlan = [];
 
 function cancelGeneration() {
   cancelRequested = true;
@@ -516,17 +517,152 @@ async function fetchHu() {
   }
 }
 
+function normalizeTitle(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function huIdOf(tc) {
+  return tc.work_item_id || (state.workItem && state.workItem.id) || 0;
+}
+
+function validateCases() {
+  const problems = [];
+  const known = state.workItem && state.workItem.criteria_list
+    ? state.workItem.criteria_list.length
+    : 0;
+  state.testCases.forEach((tc, i) => {
+    const errs = [];
+    const title = (tc.title || "").trim();
+    if (!title) errs.push("título vacío");
+    else if (title.length > 255) errs.push(`título de ${title.length} caracteres (máx. 255)`);
+    if (![1, 2, 3, 4].includes(Number(tc.priority))) errs.push(`prioridad ${tc.priority} inválida (usa 1-4)`);
+    if (!tc.steps || !tc.steps.length) errs.push("sin pasos");
+    else tc.steps.forEach((s, j) => {
+      if (!(s.action || "").trim()) errs.push(`paso ${j + 1} sin acción`);
+      if (!(s.expected || "").trim()) errs.push(`paso ${j + 1} sin resultado esperado`);
+    });
+    (tc.criterios || []).forEach((c) => {
+      if (known && (Number(c) < 1 || Number(c) > known)) {
+        errs.push(`criterio ${c} fuera de rango (1-${known})`);
+      }
+    });
+    if (errs.length) problems.push({ index: i + 1, title, errs });
+  });
+  return problems;
+}
+
 async function createCases() {
   if (!state.testCases.length) { alert("Primero genera casos"); return; }
+
+  const problems = validateCases();
+  if (problems.length) {
+    $("create-preview").classList.add("hidden");
+    $("create-result").innerHTML =
+      `<strong>Validación fallida — no se creó nada en Azure:</strong><br>` +
+      problems
+        .map((p) => `Caso ${p.index} — ${escapeHtml(p.title || "(sin título)")}: ${escapeHtml(p.errs.join(", "))}`)
+        .join("<br>");
+    setChip("chip-err", "validación");
+    return;
+  }
+  $("create-result").textContent = "";
+
+  setLoading(true, "Buscando test cases ya enlazados a la HU…");
+  const huIds = [...new Set(state.testCases.map(huIdOf))];
+  const existingMap = {};
+  let warn = "";
+  for (const id of huIds) {
+    try {
+      const data = await api(`/api/existing-testcases?work_item_id=${id}`);
+      existingMap[id] = data.items || [];
+    } catch (e) {
+      existingMap[id] = null;
+      warn = `No se pudo consultar duplicados (${e.message}). Se mostrarán todos como nuevos.`;
+    }
+  }
+  setLoading(false);
+  renderCreatePreview(existingMap, warn);
+}
+
+function renderCreatePreview(existingMap, warn) {
+  createPlan = state.testCases.map((tc, i) => {
+    const list = existingMap[huIdOf(tc)];
+    const match = list
+      ? list.find((it) => normalizeTitle(it.title) === normalizeTitle(tc.title))
+      : null;
+    return {
+      index: i,
+      existingId: match ? match.id : null,
+      action: match ? "update" : "create",
+    };
+  });
+
+  const nNew = createPlan.filter((p) => p.action === "create").length;
+  const nExists = createPlan.length - nNew;
+  const rows = createPlan.map((p) => {
+    const tc = state.testCases[p.index];
+    const badge = p.existingId
+      ? `<span class="preview-badge exists">EXISTENTE #${p.existingId}</span>`
+      : `<span class="preview-badge new">NUEVO</span>`;
+    const action = p.existingId
+      ? `<select data-plan-index="${p.index}">
+           <option value="update" selected>Actualizar existente</option>
+           <option value="skip">Omitir</option>
+         </select>`
+      : "";
+    return `<div class="preview-row">
+        <span class="preview-idx">${p.index + 1}.</span>
+        <span class="preview-title" title="${escapeHtml(tc.title)}">${escapeHtml(tc.title)}</span>
+        ${badge}${action}
+      </div>`;
+  }).join("");
+
+  const box = $("create-preview");
+  box.innerHTML = `
+    <div class="preview-head">
+      <span><strong>Vista previa:</strong> ${createPlan.length} casos → ${nNew} nuevos, ${nExists} ya existen en la HU</span>
+    </div>
+    ${warn ? `<div class="preview-warn">⚠ ${escapeHtml(warn)}</div>` : ""}
+    ${rows}
+    <div class="preview-actions">
+      <button id="btn-create-confirm" class="btn btn-success">Confirmar en Azure DevOps</button>
+      <button id="btn-create-cancel" class="btn btn-ghost">Cancelar</button>
+    </div>`;
+  box.classList.remove("hidden");
+
+  box.querySelectorAll("select[data-plan-index]").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      createPlan[Number(sel.dataset.planIndex)].action = sel.value;
+    });
+  });
+  $("btn-create-confirm").addEventListener("click", executeCreate);
+  $("btn-create-cancel").addEventListener("click", () => box.classList.add("hidden"));
+}
+
+async function executeCreate() {
+  const box = $("create-preview");
+  const payload = [];
+  createPlan.forEach((p) => {
+    if (p.action === "skip") return;
+    const tc = state.testCases[p.index];
+    payload.push({ ...tc, existing_id: p.action === "update" ? p.existingId : null });
+  });
+  box.classList.add("hidden");
+  if (!payload.length) {
+    $("create-result").textContent = "Todo fue omitido: no se envió nada a Azure DevOps.";
+    return;
+  }
+
   setLoading(true, "Creando test cases en Azure DevOps…");
 
   const groups = {};
-  state.testCases.forEach((tc) => {
-    const k = tc.work_item_id || (state.workItem && state.workItem.id) || 0;
+  payload.forEach((tc) => {
+    const k = huIdOf(tc);
     (groups[k] = groups[k] || []).push(tc);
   });
 
   const allCreated = [];
+  const allUpdated = [];
   let err = null;
   let demo = false;
   let lastPublish = null;
@@ -537,6 +673,7 @@ async function createCases() {
         body: JSON.stringify({ work_item_id: Number(huId), test_cases: cases }),
       });
       allCreated.push(...(data.created || []));
+      allUpdated.push(...(data.updated || []));
       if (data.demo) demo = true;
       if (data.publish) lastPublish = data.publish;
       if (data.error) err = data.error;
@@ -551,11 +688,13 @@ async function createCases() {
   const links = allCreated
     .map((c) => (c.url ? `<a href="${c.url}" target="_blank" rel="noopener">#${c.id}</a>` : `#${c.id}`))
     .join(", ");
+  const updatedIds = allUpdated.map((c) => `#${c.id}`).join(", ");
   let msg = demo
     ? `MODO DEMO: no se insertó en Azure. Se enviarían ${allCreated.length} test cases: ${allCreated.map((c) => `#${c.id}`).join(", ")}`
     : err
     ? `Se crearon ${allCreated.length} y falló en: ${err}`
-    : `Creados ${allCreated.length} test cases en Azure DevOps: ${links}`;
+    : `Creados ${allCreated.length} test cases${links ? `: ${links}` : ""}` +
+      (allUpdated.length ? ` · Actualizados ${allUpdated.length}: ${updatedIds}` : "");
   if (state.lastPublish) {
     const p = state.lastPublish;
     msg += p.error
@@ -762,6 +901,42 @@ function cancelGpt() {
   $("gpt-modal").classList.add("hidden");
 }
 
+function exportCsv() {
+  if (!state.testCases.length) { alert("No hay casos para exportar."); return; }
+  const criteriaList = (state.workItem && state.workItem.criteria_list) || [];
+  const sep = ";";
+  const esc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const head = ["HU", "Titulo", "Descripcion", "Prioridad", "Tipo", "Precondiciones", "Criterios", "Pasos"];
+  const rows = state.testCases.map((tc) => {
+    const huId = huIdOf(tc);
+    const crits = (tc.criterios || [])
+      .map((c) => {
+        const txt = criteriaList[Number(c) - 1];
+        return txt ? `${c}. ${flatten(txt)}` : String(c);
+      })
+      .join(" | ");
+    const pasos = (tc.steps || [])
+      .map((s, i) => `${i + 1}. ${flatten(s.action)} -> ${flatten(s.expected)}`)
+      .join("\n");
+    return [huId, tc.title, tc.description, tc.priority, tc.type, tc.preconditions, crits, pasos]
+      .map(esc)
+      .join(sep);
+  });
+  const csv = "\uFEFF" + [head.map(esc).join(sep), ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const huId = currentHuId();
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = huId ? `casos_HU_${huId}.csv` : "casos.csv";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }, 1000);
+}
+
 function normalizeImported(raw) {
   return raw.map((r) => ({
     title: flatten(r.title),
@@ -905,6 +1080,7 @@ function reset() {
   $("card-hu").classList.add("hidden");
   $("card-results").classList.add("hidden");
   $("create-result").textContent = "";
+  $("create-preview").classList.add("hidden");
   $("summary").textContent = "";
   try { localStorage.removeItem("qa-state"); } catch { /* ignore */ }
 }
@@ -928,6 +1104,7 @@ $("btn-fetch-hu").addEventListener("click", fetchHu);
 $("btn-test-azure").addEventListener("click", testAzure);
 $("btn-add-case").addEventListener("click", addCaseManual);
 $("btn-export-gpt").addEventListener("click", exportToGpt);
+$("btn-export-csv").addEventListener("click", exportCsv);
 $("btn-gpt-ok").addEventListener("click", downloadGptFile);
 $("btn-gpt-cancel").addEventListener("click", cancelGpt);
 $("gpt-quantity").addEventListener("input", () => {
