@@ -10,6 +10,7 @@ let dragState = null;
 let cancelRequested = false;
 let activeStream = null;
 let createPlan = [];
+let quantityTouched = false;
 
 function cancelGeneration() {
   cancelRequested = true;
@@ -852,7 +853,9 @@ async function exportToGpt() {
     alert("Carga una HU primero (escribe el ID y clic en 'Solo ver la HU'), o genera casos.");
     return;
   }
-  $("gpt-quantity").value = state.testCases.length || Number($("quantity").value) || 5;
+  $("gpt-quantity").value = quantityTouched
+    ? Number($("quantity").value) || 5
+    : state.testCases.length || Number($("quantity").value) || 5;
   let basePrompt = PLANTILLA_GPT;
   const qaInstr = $("instructions").value.trim();
   if (qaInstr) {
@@ -1114,6 +1117,7 @@ $("gpt-quantity").addEventListener("input", () => {
 $("btn-import-gpt").addEventListener("click", importFromGpt);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
+$("quantity").addEventListener("change", () => { quantityTouched = true; });
 
 document.querySelectorAll(".preset-btn").forEach((b) => {
   b.addEventListener("click", () => applyPreset(b.dataset.preset));
