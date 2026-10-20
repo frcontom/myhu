@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .azure_client import AzureDevOpsError, azure_client, sample_work_item
-from .config import settings
+from .config import KIRO_MODELS, settings
 from .llm_client import (
     LLMError,
     TestCaseGenerationError,
@@ -29,6 +29,7 @@ class GenerateRequest(BaseModel):
         "", description="Instrucciones extra para el agente (tipos, prioridad, enfoque)"
     )
     provider: str = Field("", description="ollama | gemini | kiro (vacío = el de .env)")
+    model: str = Field("", description="Modelo Kiro (vacío = KIRO_MODEL o auto)")
 
 
 class TestCaseModel(BaseModel):
@@ -78,6 +79,7 @@ def health() -> dict:
         "kiro": {
             "configured": settings.kiro_configured,
             "model": settings.kiro_model or "default CLI",
+            "models": KIRO_MODELS,
         },
     }
 
@@ -114,6 +116,7 @@ def generate_stream(
     quantity: int = 5,
     instructions: str = "",
     provider: str = "",
+    model: str = "",
 ):
     quantity = max(1, min(quantity, 50))
 
@@ -130,7 +133,7 @@ def generate_stream(
                 yield _sse("error", {"detail": str(exc)})
                 return
         try:
-            for ev in stream_test_cases(work_item, quantity, instructions, provider):
+            for ev in stream_test_cases(work_item, quantity, instructions, provider, model):
                 if ev["type"] == "done":
                     ev["data"]["work_item"] = work_item
                 yield _sse(ev["type"], ev["data"])
@@ -157,7 +160,7 @@ def generate(req: GenerateRequest) -> dict:
 
     try:
         result = generate_test_cases(
-            work_item, req.quantity, req.instructions, req.provider
+            work_item, req.quantity, req.instructions, req.provider, req.model
         )
     except (LLMError, TestCaseGenerationError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

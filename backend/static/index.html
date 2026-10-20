@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=32" />
+  <link rel="stylesheet" href="style.css?v=37" />
 </head>
 <body>
   <header class="topbar">
@@ -20,12 +20,12 @@
 
     <section class="card" id="card-form">
       <div class="grid-form">
-        <label>
-          ID de la Historia de Usuario (puedes poner varios: 123, 456, 789)
-          <input type="text" id="work-item-id" placeholder="ej. 12345 o 123, 456" required />
-        </label>
-        <div class="mini-fields">
-          <label>
+        <div class="form-row full">
+          <label class="id-field" title="ID de la Historia de Usuario. Puedes poner varios IDs separados por coma: 123, 456, 789">
+            ID de la HU
+            <input type="text" id="work-item-id" placeholder="ej. 12345" required />
+          </label>
+          <label class="qty-field">
             Cantidad de casos
             <select id="quantity">
               <option value="1">1</option>
@@ -43,6 +43,12 @@
               <option value="ollama" selected>Ollama (local)</option>
               <option value="gemini">Gemini (nube)</option>
               <option value="kiro">Kiro (nube)</option>
+            </select>
+          </label>
+          <label class="hidden" id="kiro-model-field" title="Modelo de Kiro a usar (créditos se descuentan de tu plan)">
+            Modelo Kiro
+            <select id="kiro-model">
+              <option value="">Auto (recomendado)</option>
             </select>
           </label>
         </div>
@@ -123,6 +129,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=32"></script>
+  <script src="app.js?v=37"></script>
 </body>
 </html>

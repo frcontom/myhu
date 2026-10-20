@@ -192,8 +192,9 @@ def generate_test_cases(
     quantity: int,
     instructions: str,
     provider: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
-    events = list(stream_test_cases(work_item, quantity, instructions, provider))
+    events = list(stream_test_cases(work_item, quantity, instructions, provider, model))
     done = next((ev["data"] for ev in events if ev["type"] == "done"), None)
     if done is None:
         error = next((ev["data"].get("detail") for ev in events if ev["type"] == "error"), None)
@@ -206,6 +207,7 @@ def stream_test_cases(
     quantity: int,
     instructions: str,
     provider: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Iterator[Dict[str, Any]]:
     try:
         resolved = _resolve_provider(provider)
@@ -234,7 +236,7 @@ def stream_test_cases(
     for attempt in range(1, 3):
         last_text = None
         error = None
-        for event in streamer(current_prompt, estimated):
+        for event in streamer(current_prompt, estimated, model_override=model):
             if event["type"] == "result":
                 last_text = event["text"]
                 error = event["error"]
@@ -353,6 +355,7 @@ def _classify_ollama_exception(exc: Exception) -> str:
 def _stream_once(
     prompt: str,
     estimated: int,
+    model_override: Optional[str] = None,
 ) -> Iterator[Dict[str, Any]]:
     payload = {
         "model": settings.ollama_model,
@@ -491,6 +494,7 @@ def _gemini_model_chain() -> List[str]:
 def _stream_once_gemini(
     prompt: str,
     estimated: int,
+    model_override: Optional[str] = None,
 ) -> Iterator[Dict[str, Any]]:
     headers = {
         "x-goog-api-key": settings.gemini_api_key,
@@ -661,7 +665,8 @@ def _kiro_extract_text(line: str) -> str:
 
 
 def _classify_kiro_error(
-    returncode: int, detail: str, timed_out: bool, timeout: int
+    returncode: int, detail: str, timed_out: bool, timeout: int,
+    model: Optional[str] = None,
 ) -> str:
     detail = (detail or "").strip()
     if timed_out:
@@ -682,6 +687,12 @@ def _classify_kiro_error(
                 "Reconstruye con: docker compose up -d --build"
             )
         return f"Kiro CLI falló (exit {returncode}): {detail[:300]}"
+    if model:
+        return (
+            f"Kiro CLI rechazó el modelo '{model}' (exit {returncode}, sin mensaje). "
+            "Prueba con 'Auto (recomendado)' u otro modelo del selector; "
+            "si persiste, verifica KIRO_API_KEY y tu plan en app.kiro.dev."
+        )
     return (
         f"Kiro CLI terminó con código {returncode} sin mensaje. "
         "Verifica KIRO_API_KEY y tu suscripción Kiro Pro en app.kiro.dev."
@@ -691,6 +702,7 @@ def _classify_kiro_error(
 def _stream_once_kiro(
     prompt: str,
     estimated: int,
+    model_override: Optional[str] = None,
 ) -> Iterator[Dict[str, Any]]:
     binary = _kiro_binary()
     if not binary:
@@ -715,7 +727,7 @@ def _stream_once_kiro(
     engine = (settings.kiro_engine or "").strip().lower()
     if engine in ("v1", "v2", "v3"):
         args += ["--agent-engine", engine]
-    model = (settings.kiro_model or "").strip()
+    model = (model_override or settings.kiro_model or "").strip()
     if model:
         args += ["--model", model]
 
@@ -797,6 +809,7 @@ def _stream_once_kiro(
                     noise,
                     timed_out["flag"],
                     settings.kiro_timeout,
+                    model or None,
                 ),
             }
             return

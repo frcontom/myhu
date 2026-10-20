@@ -338,17 +338,35 @@ function renderStep(tc, step, i) {
   grip.textContent = "⠿";
   grip.title = "Arrastrar para reordenar";
 
-  const action = document.createElement("input");
+  const action = document.createElement("textarea");
   action.className = "step-input";
   action.placeholder = "Acción";
+  action.rows = 1;
   action.value = step.action;
-  action.addEventListener("input", () => { step.action = action.value; });
 
-  const expected = document.createElement("input");
+  const expected = document.createElement("textarea");
   expected.className = "step-input";
   expected.placeholder = "Resultado esperado";
+  expected.rows = 1;
   expected.value = step.expected;
-  expected.addEventListener("input", () => { step.expected = expected.value; });
+
+  const bindStep = (el, key) => {
+    const grow = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+    };
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") e.preventDefault();
+    });
+    el.addEventListener("input", () => {
+      if (/[\r\n]/.test(el.value)) el.value = el.value.replace(/[\r\n]+/g, " ");
+      step[key] = el.value;
+      grow();
+    });
+    requestAnimationFrame(grow);
+  };
+  bindStep(action, "action");
+  bindStep(expected, "expected");
 
   const del = document.createElement("button");
   del.className = "step-del";
@@ -386,7 +404,7 @@ async function generate() {
     const id = ids[i];
     setLoading(true, ids.length > 1
       ? `Generando HU #${id} (${i + 1}/${ids.length})… puede tardar unos minutos`
-      : "Generando con el modelo local… puede tardar unos minutos");
+      : `Generando con ${providerLabel}… puede tardar unos minutos`);
     await streamOne(id, quantity, instructions);
     if (cancelRequested) break;
   }
@@ -407,7 +425,11 @@ async function generate() {
 
 function streamOne(id, quantity, instructions) {
   return new Promise((resolve) => {
-    const url = `/api/generate-stream?work_item_id=${id}&quantity=${quantity}&instructions=${encodeURIComponent(instructions)}`;
+    const provider = $("llm-provider").value;
+    const model = provider === "kiro" ? $("kiro-model").value : "";
+    const url = `/api/generate-stream?work_item_id=${id}&quantity=${quantity}` +
+      `&instructions=${encodeURIComponent(instructions)}` +
+      `&provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`;
     const es = new EventSource(url);
     activeStream = es;
 
@@ -1123,6 +1145,9 @@ $("btn-import-gpt").addEventListener("click", importFromGpt);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
 $("quantity").addEventListener("change", () => { quantityTouched = true; });
+$("llm-provider").addEventListener("change", () => {
+  $("kiro-model-field").classList.toggle("hidden", $("llm-provider").value !== "kiro");
+});
 
 document.querySelectorAll(".preset-btn").forEach((b) => {
   b.addEventListener("click", () => applyPreset(b.dataset.preset));
@@ -1143,6 +1168,18 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
       $("demo-banner").classList.remove("hidden");
     } else {
       setChip("chip-ok", `ok · ${h.model}`);
+    }
+    if (h.kiro && Array.isArray(h.kiro.models)) {
+      const sel = $("kiro-model");
+      sel.innerHTML = "";
+      for (const m of h.kiro.models) {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = `${m.label} (${m.credits})`;
+        if (m.use) opt.title = m.use;
+        sel.appendChild(opt);
+      }
+      sel.value = "";
     }
   } catch {
     setChip("chip-err", "sin conexión");

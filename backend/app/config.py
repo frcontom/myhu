@@ -2,6 +2,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PLACEHOLDERS = {"", "tu-organizacion", "Tu-Proyecto", "tu_pat_aqui", "your-organization", "your-project", "your_pat_here"}
 
+# Catálogo visible en el front (selector "Modelo Kiro"). Los ids se verificaron
+# contra kiro-cli 2.32 (`--model <id>`); credits = multiplicador de créditos Kiro.
+# Solo los modelos eficientes (<= 1.3x); los de 2x-4.4x (Opus, GPT Terra/Sol) se omiten.
+KIRO_MODELS = [
+    {"id": "", "label": "Auto (recomendado)", "credits": "1x", "use": "Selección automática de modelo"},
+    {"id": "qwen3-coder-next", "label": "Qwen3 Coder Next", "credits": "0.05x", "use": "Pruebas sencillas y generación repetitiva de código"},
+    {"id": "minimax-m2.1", "label": "MiniMax M2.1", "credits": "0.15x", "use": "Experimentos económicos"},
+    {"id": "deepseek-3.2", "label": "DeepSeek V3.2", "credits": "0.25x", "use": "Análisis y pruebas de varios pasos"},
+    {"id": "minimax-m2.5", "label": "MiniMax M2.5", "credits": "0.25x", "use": "Generación de código y pruebas"},
+    {"id": "claude-haiku-4.5", "label": "Claude Haiku 4.5", "credits": "0.4x", "use": "Correcciones rápidas y pruebas unitarias simples"},
+    {"id": "glm-5", "label": "GLM 5", "credits": "0.5x", "use": "Análisis de cambios en varios archivos"},
+    {"id": "gpt-5.6-luna", "label": "GPT 5.6 Luna", "credits": "0.6x", "use": "Pruebas y programación con bajo consumo"},
+    {"id": "claude-sonnet-5.5", "label": "Claude Sonnet 5.5", "credits": "1.3x", "use": "Pruebas integradas y depuración"},
+    {"id": "claude-sonnet-5", "label": "Claude Sonnet 5", "credits": "1.3x", "use": "Implementación y revisión de pruebas"},
+    {"id": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6", "credits": "1.3x", "use": "Desarrollo y correcciones"},
+    {"id": "claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "credits": "1.3x", "use": "Alternativa para tareas de programación"},
+]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
