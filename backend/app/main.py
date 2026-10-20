@@ -28,7 +28,7 @@ class GenerateRequest(BaseModel):
     instructions: str = Field(
         "", description="Instrucciones extra para el agente (tipos, prioridad, enfoque)"
     )
-    provider: str = Field("", description="ollama | gemini (vacío = el de .env)")
+    provider: str = Field("", description="ollama | gemini | kiro (vacío = el de .env)")
 
 
 class TestCaseModel(BaseModel):
@@ -74,6 +74,10 @@ def health() -> dict:
         "gemini": {
             "configured": settings.gemini_configured,
             "model": settings.gemini_model,
+        },
+        "kiro": {
+            "configured": settings.kiro_configured,
+            "model": settings.kiro_model or "default CLI",
         },
     }
 

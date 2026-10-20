@@ -8,9 +8,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ca /ca
-RUN if [ -f /ca/netskope-root.crt ]; then \
-      cp /ca/netskope-root.crt /usr/local/share/ca-certificates/netskope-root.crt && \
-      cp /ca/netskope-intermediate.crt /usr/local/share/ca-certificates/netskope-intermediate.crt && \
+RUN if ls /ca/*.crt >/dev/null 2>&1; then \
+      cp /ca/*.crt /usr/local/share/ca-certificates/ && \
       update-ca-certificates; \
     fi
 

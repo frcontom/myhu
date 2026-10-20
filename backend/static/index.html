@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=31" />
+  <link rel="stylesheet" href="style.css?v=32" />
 </head>
 <body>
   <header class="topbar">
@@ -42,6 +42,7 @@
             <select id="llm-provider">
               <option value="ollama" selected>Ollama (local)</option>
               <option value="gemini">Gemini (nube)</option>
+              <option value="kiro">Kiro (nube)</option>
             </select>
           </label>
         </div>
@@ -67,7 +68,7 @@
         <button id="btn-test-azure" class="btn btn-ghost">Probar conexión Azure</button>
       </div>
       <p id="azure-test-result" class="hint"></p>
-      <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con Ollama (local) o Gemini (nube), según el motor elegido.</p>
+      <p class="hint">El agente leerá la HU desde Azure DevOps y generará los casos con Ollama (local), Gemini (nube) o Kiro (nube), según el motor elegido.</p>
     </section>
 
     <section class="card hidden" id="card-hu">
@@ -122,6 +123,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=31"></script>
+  <script src="app.js?v=32"></script>
 </body>
 </html>

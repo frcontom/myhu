@@ -369,7 +369,12 @@ async function generate() {
   const quantity = Number($("quantity").value) || 5;
   const instructions = $("instructions").value.trim();
   const provider = $("llm-provider").value;
-  const providerLabel = provider === "gemini" ? "Gemini (nube)" : "el modelo local (Ollama)";
+  const providerLabel =
+    provider === "gemini"
+      ? "Gemini (nube)"
+      : provider === "kiro"
+        ? "Kiro (nube)"
+        : "el modelo local (Ollama)";
 
   state = { workItem: null, testCases: [], huMap: {} };
   cancelRequested = false;

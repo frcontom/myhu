@@ -1,5 +1,10 @@
 import json
+import os
 import re
+import shutil
+import subprocess
+import tempfile
+import threading
 import time
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -167,12 +172,17 @@ Tipo: {work_item.get('type')}
 
 def _resolve_provider(provider: Optional[str]) -> str:
     resolved = (provider or "").strip().lower() or settings.default_provider
-    if resolved not in ("ollama", "gemini"):
+    if resolved not in ("ollama", "gemini", "kiro"):
         resolved = settings.default_provider
     if resolved == "gemini" and not settings.gemini_configured:
         raise LLMError(
             "Gemini no está configurado: agrega GEMINI_API_KEY=<tu key> en el archivo .env "
             "(API key de https://aistudio.google.com/apikey) y reinicia con: docker compose up -d"
+        )
+    if resolved == "kiro" and not settings.kiro_configured:
+        raise LLMError(
+            "Kiro no está configurado: agrega KIRO_API_KEY=<tu key ksk_...> en el archivo .env "
+            "(app.kiro.dev -> API Keys) y reinicia con: docker compose up -d --build"
         )
     return resolved
 
@@ -204,9 +214,14 @@ def stream_test_cases(
         return
 
     max_tokens = (
-        settings.gemini_max_tokens if resolved == "gemini" else settings.ollama_max_tokens
+        settings.gemini_max_tokens
+        if resolved in ("gemini", "kiro")
+        else settings.ollama_max_tokens
     )
-    streamer = _stream_once_gemini if resolved == "gemini" else _stream_once
+    streamer = {
+        "gemini": _stream_once_gemini,
+        "kiro": _stream_once_kiro,
+    }.get(resolved, _stream_once)
 
     prompt = build_prompt(work_item, quantity, instructions)
     estimated = min(quantity * AVG_TOKENS_PER_CASE, max_tokens)
@@ -610,6 +625,211 @@ def _stream_once_gemini(
             last_error = _classify_gemini_exception(exc)
 
     yield {"type": "result", "text": None, "error": last_error}
+
+
+def _kiro_binary() -> Optional[str]:
+    found = shutil.which("kiro-cli")
+    if found:
+        return found
+    fallback = "/root/.local/bin/kiro-cli"
+    return fallback if os.path.isfile(fallback) else None
+
+
+def _kiro_extract_text(line: str) -> str:
+    line = line.strip()
+    if not line or not line.startswith("{"):
+        return ""
+    try:
+        obj = json.loads(line)
+    except json.JSONDecodeError:
+        return ""
+    found: List[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, str) and value and key in ("text", "content"):
+                    found.append(value)
+                elif isinstance(value, (dict, list)):
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(obj)
+    return "".join(found)
+
+
+def _classify_kiro_error(
+    returncode: int, detail: str, timed_out: bool, timeout: int
+) -> str:
+    detail = (detail or "").strip()
+    if timed_out:
+        return (
+            f"Kiro superó el tiempo límite ({timeout}s) y se canceló. "
+            "Prueba con menos casos o revisa tu plan en app.kiro.dev."
+        )
+    if detail:
+        lowered = detail.lower()
+        if "api key" in lowered or "unauthorized" in lowered or "401" in lowered:
+            return (
+                f"Kiro rechazó la API key (exit {returncode}): {detail[:300]} "
+                "Revisa KIRO_API_KEY en .env (app.kiro.dev -> API Keys)."
+            )
+        if "no such file" in lowered or "not found" in lowered:
+            return (
+                "kiro-cli no está instalado en la imagen del backend. "
+                "Reconstruye con: docker compose up -d --build"
+            )
+        return f"Kiro CLI falló (exit {returncode}): {detail[:300]}"
+    return (
+        f"Kiro CLI terminó con código {returncode} sin mensaje. "
+        "Verifica KIRO_API_KEY y tu suscripción Kiro Pro en app.kiro.dev."
+    )
+
+
+def _stream_once_kiro(
+    prompt: str,
+    estimated: int,
+) -> Iterator[Dict[str, Any]]:
+    binary = _kiro_binary()
+    if not binary:
+        yield {
+            "type": "result",
+            "text": None,
+            "error": (
+                "kiro-cli no está instalado en la imagen del backend. "
+                "Reconstruye con: docker compose up -d --build"
+            ),
+        }
+        return
+
+    args = [
+        binary,
+        "chat",
+        "--no-interactive",
+        "--output-format",
+        "stream-json",
+        "--trust-tools=",
+    ]
+    engine = (settings.kiro_engine or "").strip().lower()
+    if engine in ("v1", "v2", "v3"):
+        args += ["--agent-engine", engine]
+    model = (settings.kiro_model or "").strip()
+    if model:
+        args += ["--model", model]
+
+    env = dict(os.environ)
+    env["KIRO_API_KEY"] = settings.kiro_api_key
+    env["PATH"] = f"{env.get('PATH', '')}:/root/.local/bin"
+
+    tmpdir = tempfile.mkdtemp(prefix="kiro-run-")
+    proc: Optional[subprocess.Popen] = None
+    watchdog: Optional[threading.Timer] = None
+    timed_out = {"flag": False}
+    buf = ""
+    token_count = 0
+    start = time.time()
+    last_yield = 0.0
+
+    def _kill_on_timeout() -> None:
+        timed_out["flag"] = True
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+
+    try:
+        proc = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+            cwd=tmpdir,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        watchdog = threading.Timer(settings.kiro_timeout, _kill_on_timeout)
+        watchdog.daemon = True
+        watchdog.start()
+
+        assert proc.stdin is not None and proc.stdout is not None
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+
+        raw_lines: List[str] = []
+        for line in proc.stdout:
+            raw_lines.append(line)
+            delta = _kiro_extract_text(line)
+            if delta:
+                buf += delta
+                token_count = max(token_count, len(buf) // 4)
+                now = time.time()
+                if now - last_yield >= 0.25:
+                    last_yield = now
+                    elapsed = now - start
+                    tps = round(token_count / elapsed, 1) if elapsed > 0 else 0.0
+                    percent = min(int(token_count / estimated * 100), 99)
+                    yield {
+                        "type": "progress",
+                        "data": {
+                            "tokens": token_count,
+                            "elapsed": round(elapsed, 1),
+                            "tokens_per_sec": tps,
+                            "percent": percent,
+                            "estimated": estimated,
+                        },
+                    }
+
+        proc.wait()
+
+        if proc.returncode != 0:
+            noise = "".join(ln for ln in raw_lines if not ln.strip().startswith("{"))
+            yield {
+                "type": "result",
+                "text": None,
+                "error": _classify_kiro_error(
+                    proc.returncode or -1,
+                    noise,
+                    timed_out["flag"],
+                    settings.kiro_timeout,
+                ),
+            }
+            return
+
+        if not buf.strip():
+            yield {
+                "type": "result",
+                "text": None,
+                "error": (
+                    "Kiro respondió vacío (sin texto útil en stream-json). "
+                    "Revisa KIRO_MODEL/KIRO_ENGINE en .env."
+                ),
+            }
+            return
+    except OSError as exc:
+        yield {
+            "type": "result",
+            "text": None,
+            "error": f"No se pudo ejecutar kiro-cli: {exc}",
+        }
+        return
+    finally:
+        if watchdog is not None:
+            watchdog.cancel()
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    yield {"type": "result", "text": buf, "error": None}
 
 
 def _parse_json(text: str) -> Any:

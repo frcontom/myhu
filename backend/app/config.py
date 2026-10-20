@@ -28,14 +28,23 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.2
     gemini_max_tokens: int = 16384
 
+    kiro_api_key: str = ""
+    kiro_model: str = ""
+    kiro_engine: str = ""
+    kiro_timeout: int = 600
+
     @property
     def gemini_configured(self) -> bool:
         return bool((self.gemini_api_key or "").strip())
 
     @property
+    def kiro_configured(self) -> bool:
+        return bool((self.kiro_api_key or "").strip())
+
+    @property
     def default_provider(self) -> str:
         provider = (self.llm_provider or "ollama").strip().lower()
-        return provider if provider in ("ollama", "gemini") else "ollama"
+        return provider if provider in ("ollama", "gemini", "kiro") else "ollama"
 
     @property
     def api_base(self) -> str:

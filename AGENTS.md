@@ -12,7 +12,7 @@ Todo corre en local con Docker Compose. Sin Node, sin base de datos, sin servici
 
 - **Backend:** Python 3.12 + FastAPI + httpx + pydantic-settings
 - **Frontend:** HTML/CSS/JS vanilla servido por FastAPI (sin build)
-- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto **o Gemini en la nube** (`GEMINI_API_KEY` en `.env`, modelo default `gemini-3.7-flash` con cadena de respaldo `GEMINI_FALLBACK_MODELS` contra los 503 de Google, selector "Motor de IA" en el front)
+- **LLM:** Ollama (contenedor `ollama/ollama`) con modelo `qwen2.5:7b-instruct` por defecto **o Gemini en la nube** (`GEMINI_API_KEY` en `.env`, modelo default `gemini-3.7-flash` con cadena de respaldo `GEMINI_FALLBACK_MODELS` contra los 503 de Google, selector "Motor de IA" en el front) **o Kiro en la nube** (`KIRO_API_KEY` en `.env`: la CLI oficial `kiro-cli` se instala en la imagen del backend y se invoca en modo headless con `--output-format stream-json`; NO existe endpoint HTTP de Kiro)
 - **Azure DevOps:** REST API `api-version=7.1`, autenticación con PAT (Basic auth)
 
 ## Cómo correr el proyecto
@@ -70,7 +70,7 @@ azureDevops/
 | GET | `/api/test-azure` | Valida org + PAT + proyecto + permisos Work Items (botón "Probar conexión Azure") |
 | GET | `/api/hu/{id}` | HU normalizada (incluye `criteria_list`) |
 | GET | `/api/existing-testcases` | Test Cases ya enlazados a la HU (anti-duplicados) |
-| GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo; `?provider=ollama\|gemini`) |
+| GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo; `?provider=ollama\|gemini\|kiro`) |
 | POST | `/api/generate` | Generación bloqueante |
 | POST | `/api/create` | Crea Test Cases en Azure enlazados a la HU |
 
@@ -99,7 +99,8 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual y NO toca Oll
 - **`azure_client.py:86`**: la URL del work item es `/_apis/wit/workItems/{id}` y el POST va a `/wit/workitems/$Test Case` (con `$` URL-encoded). El `$` en la ruta debe escribirse `$Test Case`; httpx lo codifica.
 - **`azure_client.py:79`**: la relación usa `rel: "Microsoft.VSTS.Common.TestedBy-Reverse"`. ⚠️ Es el nombre **direccional** que Azure acepta para el enlace "Tests"/"Tested by" (el caso queda en la pestaña "Tested by" de la HU). Los nombres base `Microsoft.VSTS.Common.Tests` / `Microsoft.VSTS.Common.TestedBy` dan 400 "Unknown relation type"; `System.LinkTypes.Related` siempre funciona pero no es "Tested by". Desde la HU, la misma relación aparece como **`TestedBy-Forward`** (es con lo que filtra `list_test_cases_for_hu`); los URLs de relaciones usan `workItems` con **I mayúscula** (regex case-insensitive).
 - **`llm_client.py`**: `format="json"` en Ollama fuerza JSON, pero igual se normaliza con `_parse_json` y `_normalize_case`. Nunca confiar en que el modelo devuelva JSON perfecto.
-- **`llm_client.py` `_resolve_provider`**: el proveedor llega por request (`?provider=`/`provider` en JSON) o por `LLM_PROVIDER` del `.env`. Si es `gemini` sin `GEMINI_API_KEY` devuelve un error legible. La key NUNCA se loguea ni se expone en `/api/health` (solo `configured: true/false`).
+- **`llm_client.py` `_resolve_provider`**: el proveedor llega por request (`?provider=`/`provider` en JSON) o por `LLM_PROVIDER` del `.env`. Si es `gemini` sin `GEMINI_API_KEY` o `kiro` sin `KIRO_API_KEY` devuelve un error legible. La key NUNCA se loguea ni se expone en `/api/health` (solo `configured: true/false`).
+- **`llm_client.py` `_stream_once_kiro`**: ejecuta `kiro-cli chat --no-interactive --output-format stream-json --trust-tools=` (sin confiar herramientas; cwd en tmpdir vacío) con `KIRO_API_KEY` en el env; stdin recibe el prompt (no como argumento, para evitar límites de longitud). Watchdog `KIRO_TIMEOUT` (600s) mata el proceso; `finally` mata y limpia en cancelación. El esquema de los eventos stream-json se extrae con `_kiro_extract_text` (busca claves `text`/`content` recursivas) — si Kiro cambia el formato, ajustar ahí. `Dockerfile`: instalación tolerante (si `cli.kiro.dev` no baja, el build sigue y el proveedor da error legible en runtime).
 - **`llm_client.py` `steps_to_tcm_html`**: el formato que la org del usuario reconoce es `<step type="ValidateStep">` con **DOS** `<parameterizedString>` (acción + esperado), `last="{len(steps)*2}"` y escapado HTML. ⚠️ El formato estándar `Action`/`ExpectedResult` NO renderiza el editor de pasos en esta org.
 - **`Dockerfile` y `Dockerfile.ollama`**: soporte de CA corporativa (Netskope). Copian `backend/ca/netskope-root.crt` + `netskope-intermediate.crt` → `/usr/local/share/ca-certificates/` + `update-ca-certificates`; `PIP_CERT` (backend) y `SSL_CERT_FILE` (ollama). Si no existen, build normal. `docker-compose.yml` construye ollama desde `backend/Dockerfile.ollama`. Scripts en `scripts/generar_ca.bat|ps1` y `scripts/importar_modelo.ps1`.
 - **`main.py:108`**: `StaticFiles(html=True)` montado en `/`; las rutas `/api/*` se registran ANTES para que el mount no las intercepte.
