@@ -165,7 +165,6 @@ function renderCases(cases) {
   const container = $("cases-container");
   container.innerHTML = "";
   cases.forEach((tc, idx) => container.appendChild(renderCase(tc, idx)));
-  saveState();
 }
 
 function fieldLabel(text) {
@@ -487,39 +486,12 @@ function streamOne(id, quantity, instructions) {
   });
 }
 
-function saveState() {
-  try {
-    localStorage.setItem("qa-state", JSON.stringify({
-      workItem: state.workItem,
-      testCases: state.testCases,
-      huMap: state.huMap,
-    }));
-  } catch { /* almacenamiento lleno o no disponible */ }
-}
-
-function restoreState() {
-  try {
-    const raw = localStorage.getItem("qa-state");
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    if (data && Array.isArray(data.testCases) && data.testCases.length) {
-      state = {
-        workItem: data.workItem || null,
-        testCases: data.testCases,
-        huMap: data.huMap || {},
-      };
-      renderResults();
-    }
-  } catch { /* estado inválido */ }
-}
-
 function renderResults() {
   showHu(state.workItem);
   $("summary").textContent = state.testCases.length + " casos en " + Object.keys(state.huMap).length + " HU";
   renderCoverage();
   renderCases(state.testCases);
   $("card-results").classList.remove("hidden");
-  saveState();
 }
 
 async function fetchHu() {
@@ -1197,5 +1169,5 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
   } catch {
     setChip("chip-err", "sin conexión");
   }
-  restoreState();
+  try { localStorage.removeItem("qa-state"); } catch { /* arrancar siempre limpio */ }
 })();

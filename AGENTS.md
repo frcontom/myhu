@@ -87,7 +87,7 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual y NO toca Oll
 - **Drag & drop** para reordenar pasos (cada `.step-row` es draggable; `dragState` global por caso).
 - **Cobertura**: panel con ✔/✖ por criterio, **% de cobertura**, y botón **"Completar cobertura"** (`completeCoverage`) que genera casos para los criterios faltantes vía streaming.
 - **Cancelar generación**: botón en el loader; `cancelRequested` + `activeStream.close()` para cortar el SSE y el batch.
-- **Persistencia local**: `saveState()`/`restoreState()` guardan `{workItem, testCases, huMap}` en `localStorage` ("Limpiar" lo borra).
+- **Sin persistencia entre recargas**: la app arranca SIEMPRE en limpio (`init` borra el `localStorage` legacy "qa-state"); el estado `{workItem, testCases, huMap}` solo vive en memoria. "Limpiar" resetea la sesión (HU, casos, vista previa).
 - **Vista previa + validación**: `validateCases()` corre antes de tocar Azure; `renderCreatePreview()` muestra cada caso como NUEVO/EXISTENTE (match por título normalizado) con acción actualizar/omitir; `executeCreate()` envía el plan.
 - **Anti-duplicados**: `GET /api/existing-testcases` usa las relaciones de la HU (`TestedBy-Forward` en la HU → `TestedBy-Reverse` desde el TC) + batch GET; `existing_id` en el payload dispara `update_test_case` (PATCH) en vez de crear.
 - **Export CSV**: `exportCsv()` genera CSV con `;` y BOM UTF-8 (abre bien en Excel español), 1 fila por caso, pasos "N. acción -> esperado".

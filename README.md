@@ -120,7 +120,7 @@ Si algo falla, mira la tabla de abajo.
 5. **"Importar mejora de GPT"** → se cargan los casos en el editor.
 6. **"Crear en Azure DevOps"**.
 
-> El editor **se guarda solo en el navegador** (localStorage): recargar no pierde el trabajo. "Limpiar" borra lo guardado.
+> El editor vive **solo en memoria**: recargar o cerrar la pestaña arranca en limpio (no se restaura la última HU ni los casos). "Limpiar" vacía la sesión actual.
 
 ---
 
