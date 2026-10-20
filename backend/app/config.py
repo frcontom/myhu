@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 4096
 
     llm_provider: str = "ollama"
+    enabled_providers: str = "ollama,gemini,kiro"
     gemini_api_key: str = ""
     gemini_url: str = "https://generativelanguage.googleapis.com"
     gemini_model: str = "gemini-3.7-flash"
@@ -60,9 +61,19 @@ class Settings(BaseSettings):
         return bool((self.kiro_api_key or "").strip())
 
     @property
+    def enabled_providers_list(self) -> list:
+        valid = ("ollama", "gemini", "kiro")
+        raw = {p.strip() for p in (self.enabled_providers or "").split(",") if p.strip()}
+        ordered = [p for p in valid if p in raw]
+        return ordered or list(valid)
+
+    @property
     def default_provider(self) -> str:
         provider = (self.llm_provider or "ollama").strip().lower()
-        return provider if provider in ("ollama", "gemini", "kiro") else "ollama"
+        if provider not in ("ollama", "gemini", "kiro"):
+            provider = "ollama"
+        enabled = self.enabled_providers_list
+        return provider if provider in enabled else enabled[0]
 
     @property
     def api_base(self) -> str:

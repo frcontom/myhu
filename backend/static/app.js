@@ -1181,6 +1181,19 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
       }
       sel.value = "";
     }
+    const providerLabels = { ollama: "Ollama (local)", gemini: "Gemini (nube)", kiro: "Kiro (nube)" };
+    if (Array.isArray(h.providers) && h.providers.length) {
+      const psel = $("llm-provider");
+      psel.innerHTML = "";
+      for (const p of h.providers) {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = providerLabels[p] || p;
+        psel.appendChild(opt);
+      }
+      psel.value = h.providers.includes(h.llm_provider) ? h.llm_provider : h.providers[0];
+      psel.dispatchEvent(new Event("change"));
+    }
   } catch {
     setChip("chip-err", "sin conexión");
   }

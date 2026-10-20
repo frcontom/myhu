@@ -72,6 +72,7 @@ def health() -> dict:
         "ollama_url": settings.ollama_url,
         "ollama": _probe_ollama(),
         "llm_provider": settings.default_provider,
+        "providers": settings.enabled_providers_list,
         "gemini": {
             "configured": settings.gemini_configured,
             "model": settings.gemini_model,

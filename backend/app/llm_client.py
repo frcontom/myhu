@@ -167,6 +167,10 @@ Tipo: {work_item.get('type')}
 5. El campo "title" NO debe llevar prefijos como "TC-001:" ni numeración; solo un título descriptivo.
 6. Los casos deben ser variados: feliz, negativos, límites, edge cases.
 7. Las precondiciones deben ser específicas del negocio y verificables, como en el ejemplo.
+
+## INSTRUCCIONES DEL QA — OBLIGATORIAS (última palabra)
+Son de máxima prioridad dentro del CONTENIDO de los casos (títulos, pasos, prioridades, tipos, precondiciones, enfoque) y deben cumplirse en TODOS los casos generados:
+{instructions or "(ninguna)"}
 """.strip()
 
 
@@ -174,6 +178,12 @@ def _resolve_provider(provider: Optional[str]) -> str:
     resolved = (provider or "").strip().lower() or settings.default_provider
     if resolved not in ("ollama", "gemini", "kiro"):
         resolved = settings.default_provider
+    if resolved not in settings.enabled_providers_list:
+        raise LLMError(
+            f"El motor '{resolved}' está deshabilitado en este despliegue "
+            f"(ENABLED_PROVIDERS en .env habilita: {', '.join(settings.enabled_providers_list) or 'ninguno'}). "
+            "Actívalo en .env y reinicia con: docker compose up -d, o elige otro motor."
+        )
     if resolved == "gemini" and not settings.gemini_configured:
         raise LLMError(
             "Gemini no está configurado: agrega GEMINI_API_KEY=<tu key> en el archivo .env "
@@ -247,14 +257,28 @@ def stream_test_cases(
             yield {"type": "error", "data": {"detail": error}}
             return
 
+        if not last_text:
+            yield {"type": "error", "data": {"detail": "El modelo no devolvió texto."}}
+            return
+
         try:
             data = _parse_json(last_text)
         except Exception as exc:
+            head = last_text[:300].replace("\n", " ")
+            tail = last_text[-300:].replace("\n", " ")
+            print(
+                f"[llm] parse failed hu={work_item.get('id')} err={exc} "
+                f"head={head!r} tail={tail!r}",
+                flush=True,
+            )
             yield {
                 "type": "error",
                 "data": {"detail": f"No se pudo interpretar la respuesta del modelo: {exc}"},
             }
             return
+
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            data = {"test_cases": data}
 
         if isinstance(data, dict):
             if not summary:
@@ -847,14 +871,36 @@ def _stream_once_kiro(
 
 def _parse_json(text: str) -> Any:
     text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise ValueError("JSON no encontrado en la respuesta")
+    except json.JSONDecodeError as exc:
+        last_error: Exception = exc
+    decoder = json.JSONDecoder()
+    fallback_any: Any = None
+    fallback_list: Any = None
+    for match in re.finditer(r"[\[{]", text):
+        try:
+            value, _end = decoder.raw_decode(text, match.start())
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if isinstance(value, dict) and "test_cases" in value:
+            return value
+        if fallback_any is None:
+            fallback_any = value
+        if (
+            fallback_list is None
+            and isinstance(value, list)
+            and value
+            and isinstance(value[0], dict)
+        ):
+            fallback_list = value
+    if fallback_list is not None:
+        return fallback_list
+    if fallback_any is not None:
+        return fallback_any
+    raise ValueError(f"JSON no encontrado en la respuesta ({last_error})")
 
 
 def _to_int(value: Any, default: int) -> int:
