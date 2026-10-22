@@ -174,12 +174,51 @@ Son de máxima prioridad dentro del CONTENIDO de los casos (títulos, pasos, pri
 """.strip()
 
 
-def build_comment_prompt(work_item: Dict[str, Any], note: str) -> str:
+COMMENT_STATE_TEXT = {
+    "done": "La HU pasa a estado DONE (validada / cerrada).",
+    "bloqueo": "La HU queda BLOQUEADA.",
+    "dependencia": "La HU queda en espera por una DEPENDENCIA.",
+}
+
+
+def build_comment_prompt(
+    work_item: Dict[str, Any],
+    note: str,
+    state: str = "",
+    cause: str = "",
+) -> str:
     criteria = work_item.get("criteria_list") or []
     criteria_line = (
         f"{len(criteria)} criterios de aceptación"
         if criteria
         else "sin criterios detallados"
+    )
+    st = (state or "").strip().lower()
+    state_line = COMMENT_STATE_TEXT.get(st, "")
+    cause = (cause or "").strip()
+    motive_parts: List[str] = []
+    if state_line:
+        motive_parts.append(state_line)
+        if st in ("bloqueo", "dependencia") and cause:
+            label = (
+                "Causa del bloqueo"
+                if st == "bloqueo"
+                else "Elemento del que se depende"
+            )
+            motive_parts.append(
+                f'{label}: "{cause}". Usa EXACTAMENTE esa información; NO inventes detalles.'
+            )
+        elif st in ("bloqueo", "dependencia"):
+            motive_parts.append(
+                "El QA NO indicó la causa/detalle: NO inventes motivos; "
+                "menciónalo en términos generales."
+            )
+    note = (note or "").strip()
+    if note:
+        motive_parts.append(f"Observaciones adicionales del QA: {note}")
+    motive_block = (
+        "\n".join(f"- {p}" for p in motive_parts)
+        or "- (sin motivo específico: usa tu criterio con profesionalismo)"
     )
     return f"""
 Eres un QA senior. Redacta UN comentario breve y profesional para publicar en la Historia de Usuario de Azure DevOps.
@@ -187,16 +226,16 @@ Eres un QA senior. Redacta UN comentario breve y profesional para publicar en la
 ## Historia de Usuario
 ID: {work_item.get('id')}
 Título: {work_item.get('title')}
-Estado actual: {work_item.get('state') or 'N/D'}
+Estado actual en Azure: {work_item.get('state') or 'N/D'}
 Descripción: {(work_item.get('description') or '(sin descripción)')[:900]}
 Criterios: {criteria_line}
 
-## Motivo indicado por el QA
-{note}
+## Motivo del comentario (estado destino + detalle del QA)
+{motive_block}
 
 Requisitos:
 - Entre 3 y 6 líneas, tono profesional y natural (que no suene a plantilla).
-- Explica el motivo indicado y su implicación para la HU y el trabajo de QA.
+- Integra de forma natural: (1) el estado destino, (2) la causa o dependencia si se indicó, (3) las observaciones del QA.
 - NO saludos, NO firma, NO markdown, NO comillas envolviendo el texto.
 - NO uses JSON ni llaves {{}}: responde con TEXTO PLANO.
 - Responde SOLO con el texto del comentario.
@@ -253,16 +292,21 @@ def generate_comment(
     note: str,
     provider: Optional[str] = None,
     model: Optional[str] = None,
+    state: str = "",
+    cause: str = "",
 ) -> str:
     resolved = _resolve_provider(provider)
     streamer = {
         "gemini": _stream_once_gemini,
         "kiro": _stream_once_kiro,
     }.get(resolved, _stream_once)
-    prompt = build_comment_prompt(work_item, note)
+    prompt = build_comment_prompt(work_item, note, state, cause)
+    kwargs: Dict[str, Any] = {"model_override": model, "max_tokens": 600}
+    if streamer is _stream_once:
+        kwargs["json_format"] = False
     text: Optional[str] = None
     error: Optional[str] = None
-    for event in streamer(prompt, 400, model_override=model):
+    for event in streamer(prompt, 400, **kwargs):
         if event["type"] == "result":
             text = event.get("text")
             error = event.get("error")
@@ -458,19 +502,22 @@ def _stream_once(
     prompt: str,
     estimated: int,
     model_override: Optional[str] = None,
+    max_tokens: Optional[int] = None,
+    json_format: bool = True,
 ) -> Iterator[Dict[str, Any]]:
     payload = {
         "model": settings.ollama_model,
         "prompt": prompt,
         "stream": True,
-        "format": "json",
         "keep_alive": "30m",
         "options": {
             "temperature": settings.ollama_temperature,
-            "num_predict": settings.ollama_max_tokens,
+            "num_predict": max_tokens or settings.ollama_max_tokens,
             "num_ctx": settings.ollama_num_ctx,
         },
     }
+    if json_format:
+        payload["format"] = "json"
 
     buf = ""
     token_count = 0
@@ -597,6 +644,7 @@ def _stream_once_gemini(
     prompt: str,
     estimated: int,
     model_override: Optional[str] = None,
+    max_tokens: Optional[int] = None,
 ) -> Iterator[Dict[str, Any]]:
     headers = {
         "x-goog-api-key": settings.gemini_api_key,
@@ -637,7 +685,7 @@ def _stream_once_gemini(
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": settings.gemini_temperature,
-                "maxOutputTokens": settings.gemini_max_tokens,
+                "maxOutputTokens": max_tokens or settings.gemini_max_tokens,
                 "responseMimeType": "application/json",
             },
         }
@@ -805,6 +853,7 @@ def _stream_once_kiro(
     prompt: str,
     estimated: int,
     model_override: Optional[str] = None,
+    max_tokens: Optional[int] = None,
 ) -> Iterator[Dict[str, Any]]:
     binary = _kiro_binary()
     if not binary:

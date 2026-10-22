@@ -1085,8 +1085,12 @@ function reset() {
   $("create-result").textContent = "";
   $("create-preview").classList.add("hidden");
   $("card-comment").classList.add("hidden");
+  $("comment-state").value = "";
+  $("comment-cause").value = "";
+  $("comment-cause-field").classList.add("hidden");
   $("comment-note").value = "";
   $("comment-text").value = "";
+  $("comment-loading").classList.add("hidden");
   $("summary").textContent = "";
   try { localStorage.removeItem("qa-state"); } catch { /* ignore */ }
 }
@@ -1126,26 +1130,40 @@ async function generateComment() {
     alert("Carga primero la HU (\"Solo ver la HU\" o genera casos).");
     return;
   }
+  const st = $("comment-state").value;
+  if (!st) { alert("Selecciona el estado destino de la HU."); return; }
   const note = $("comment-note").value.trim();
-  if (!note) { alert("Escribe el motivo del comentario (ej.: la HU pasa a Done)."); return; }
+  const cause = $("comment-cause").value.trim();
   const btn = $("btn-comment-gen");
+  const loading = $("comment-loading");
+  const motor = { ollama: "Ollama", gemini: "Gemini", kiro: "Kiro" }[$("llm-provider").value] || $("llm-provider").value;
+  $("comment-text").value = "";
+  const started = Date.now();
+  loading.textContent = `⏳ Generando con ${motor}… 0s`;
+  loading.classList.remove("hidden");
   btn.disabled = true;
   btn.textContent = "Generando…";
+  const timer = setInterval(() => {
+    loading.textContent = `⏳ Generando con ${motor}… ${Math.round((Date.now() - started) / 1000)}s`;
+  }, 500);
   try {
     const res = await api("/api/comment", {
       method: "POST",
       body: JSON.stringify({
         work_item_id: state.workItem.id,
+        state: st,
+        cause,
         note,
         provider: $("llm-provider").value,
         model: $("kiro-model") ? $("kiro-model").value : "",
       }),
     });
     $("comment-text").value = res.comment || "";
-    $("comment-text").focus();
   } catch (err) {
     alert(err.message);
   } finally {
+    clearInterval(timer);
+    loading.classList.add("hidden");
     btn.disabled = false;
     btn.textContent = "Generar comentario";
   }
@@ -1165,7 +1183,27 @@ function copyComment() {
 $("btn-comment-gen").addEventListener("click", generateComment);
 $("btn-comment-copy").addEventListener("click", copyComment);
 $("comment-note").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generateComment(); }
+});
+$("comment-cause").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); generateComment(); }
+});
+$("comment-state").addEventListener("change", () => {
+  const v = $("comment-state").value;
+  const field = $("comment-cause-field");
+  const label = $("comment-cause-label");
+  const input = $("comment-cause");
+  if (v === "bloqueo") {
+    field.classList.remove("hidden");
+    label.textContent = "Causa del bloqueo";
+    input.placeholder = "Ej.: ambiente de pruebas caído, defecto crítico, falta de datos...";
+  } else if (v === "dependencia") {
+    field.classList.remove("hidden");
+    label.textContent = "Elemento del que depende";
+    input.placeholder = "Ej.: HU #1234, API de pagos, entrega del backend...";
+  } else {
+    field.classList.add("hidden");
+  }
 });
 $("quantity").addEventListener("change", () => { quantityTouched = true; });
 $("llm-provider").addEventListener("change", () => {

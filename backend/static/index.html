@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=40" />
+  <link rel="stylesheet" href="style.css?v=41" />
 </head>
 <body>
   <header class="topbar">
@@ -54,7 +54,7 @@
         </div>
         <label class="full">
           Instrucciones para el agente (opcional)
-          <textarea id="instructions" rows="2"
+          <textarea id="instructions" rows="6"
             placeholder="ej. enfócate en casos negativos y de límite, prioriza críticos, incluye pruebas de seguridad…"></textarea>
         </label>
         <div class="presets full">
@@ -103,11 +103,30 @@
 
     <section class="card hidden" id="card-comment">
       <h2>Comentario para la HU</h2>
-      <p class="hint">Genera un texto breve para pegarlo en los comentarios de la HU en Azure DevOps.</p>
+      <p class="hint">Elige el estado destino (y la causa/dependencia si aplica), agrega observaciones opcionales y genera el texto para pegarlo en los comentarios de la HU.</p>
       <div class="comment-row">
-        <input type="text" id="comment-note" maxlength="600"
-          placeholder="Ej.: la HU pasa a Done — se validó la funcionalidad completa" />
+        <label class="comment-field">
+          Estado destino de la HU
+          <select id="comment-state">
+            <option value="">— Selecciona —</option>
+            <option value="done">Done (validada / cerrada)</option>
+            <option value="bloqueo">Bloqueo</option>
+            <option value="dependencia">Dependencia</option>
+          </select>
+        </label>
+        <label class="comment-field hidden" id="comment-cause-field">
+          <span id="comment-cause-label">Causa</span>
+          <input type="text" id="comment-cause" maxlength="300" placeholder="" />
+        </label>
+      </div>
+      <label class="comment-field">
+        Observaciones del comentario (opcional)
+        <textarea id="comment-note" rows="3" maxlength="1000"
+          placeholder="Detalle que quieras sumar al comentario (se une al estado elegido)..."></textarea>
+      </label>
+      <div class="comment-row comment-row-actions">
         <button id="btn-comment-gen" class="btn btn-primary">Generar comentario</button>
+        <p id="comment-loading" class="hint hidden"></p>
       </div>
       <textarea id="comment-text" rows="6"
         placeholder="El comentario listo para copiar aparecerá aquí..."></textarea>
@@ -144,6 +163,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>

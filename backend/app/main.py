@@ -35,7 +35,9 @@ class GenerateRequest(BaseModel):
 
 class CommentRequest(BaseModel):
     work_item_id: int = Field(..., description="ID de la Historia de Usuario")
-    note: str = Field(..., min_length=1, max_length=600, description="Motivo (ej.: la HU pasa a Done)")
+    state: str = Field("", description="done | bloqueo | dependencia (vacío = sin estado)")
+    cause: str = Field("", max_length=300, description="Causa del bloqueo o elemento del que se depende")
+    note: str = Field("", max_length=1000, description="Observaciones adicionales del QA")
     provider: str = Field("", description="ollama | gemini | kiro (vacío = el de .env)")
     model: str = Field("", description="Modelo Kiro (vacío = KIRO_MODEL o auto)")
 
@@ -117,9 +119,12 @@ def get_hu(work_item_id: int) -> dict:
 
 @app.post("/api/comment")
 def create_comment(req: CommentRequest) -> dict:
+    state = (req.state or "").strip().lower()
+    if state not in ("", "done", "bloqueo", "dependencia"):
+        raise HTTPException(status_code=400, detail="Estado inválido: usa done, bloqueo o dependencia")
     note = req.note.strip()
-    if not note:
-        raise HTTPException(status_code=400, detail="Escribe el motivo del comentario")
+    if not state and not note:
+        raise HTTPException(status_code=400, detail="Selecciona un estado destino o escribe observaciones")
     if settings.demo_mode:
         work_item = sample_work_item(req.work_item_id)
     else:
@@ -130,7 +135,9 @@ def create_comment(req: CommentRequest) -> dict:
         except AzureDevOpsError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     try:
-        comment = generate_comment(work_item, note, req.provider, req.model)
+        comment = generate_comment(
+            work_item, note, req.provider, req.model, state, req.cause.strip()
+        )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"comment": comment}

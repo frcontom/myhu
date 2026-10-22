@@ -112,7 +112,7 @@ Si algo falla, mira la tabla de abajo.
 4. **Revisa/edita** cada caso: título, precondiciones, descripción, criterios que cubre, pasos (reordénalos con **drag & drop** ⠿).
 5. **Crear en Azure DevOps** → crea los `Test Case` enlazados a la HU (pestaña **"Tested by"**, con precondiciones y pasos editables). El panel de **cobertura** (✔/✖) muestra qué criterios quedan sin cubrir y el botón **"Completar cobertura"** genera los faltantes.
 
-6. **Comentario para la HU** (opcional): en la tarjeta "Comentario para la HU" escribe el motivo (ej.: "la HU pasa a Done"), **Generar comentario** y **Copiar** → pégalo en los comentarios del work item en Azure DevOps.
+6. **Comentario para la HU** (opcional): elige el **estado destino** (Done / Bloqueo / Dependencia — con causa o elemento del que se depende si aplica), agrega **observaciones** si quieres, **Generar comentario** y **Copiar** → pégalo en los comentarios del work item en Azure DevOps.
 
 **B. Directo con ChatGPT (sin Ollama):**
 1. Escribe el **ID de la HU**.

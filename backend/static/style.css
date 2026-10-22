@@ -307,6 +307,33 @@ textarea { resize: vertical; }
   min-width: 0;
 }
 
+.comment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.comment-field select,
+.comment-field input,
+.comment-field textarea {
+  width: 100%;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.comment-row-actions {
+  align-items: center;
+}
+
+.comment-row-actions .hint {
+  margin: 0;
+}
+
 #comment-text {
   width: 100%;
 }

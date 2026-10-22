@@ -73,7 +73,7 @@ azureDevops/
 | GET | `/api/generate-stream` | Generación con streaming SSE (progreso en vivo; `?provider=ollama\|gemini\|kiro`) |
 | POST | `/api/generate` | Generación bloqueante |
 | POST | `/api/create` | Crea Test Cases en Azure enlazados a la HU |
-| POST | `/api/comment` | Comentario breve para la HU: `{work_item_id, note, provider, model}` → `{comment}` (contexto HU + motor elegido; NO publica en Azure) |
+| POST | `/api/comment` | Comentario breve para la HU: `{work_item_id, state, cause, note, provider, model}` → `{comment}`; `state` = done/bloqueo/dependencia (causa opcional, observaciones se unen al estado); NO publica en Azure |
 
 ## Flujo "Pasar a ChatGPT" (sin API de OpenAI, sin Ollama)
 
@@ -92,7 +92,7 @@ El usuario tiene ChatGPT **plan GO** (sin API). El flujo es manual y NO toca Oll
 - **Vista previa + validación**: `validateCases()` corre antes de tocar Azure; `renderCreatePreview()` muestra cada caso como NUEVO/EXISTENTE (match por título normalizado) con acción actualizar/omitir; `executeCreate()` envía el plan.
 - **Anti-duplicados**: `GET /api/existing-testcases` usa las relaciones de la HU (`TestedBy-Forward` en la HU → `TestedBy-Reverse` desde el TC) + batch GET; `existing_id` en el payload dispara `update_test_case` (PATCH) en vez de crear.
 - **Export CSV**: `exportCsv()` genera CSV con `;` y BOM UTF-8 (abre bien en Excel español), 1 fila por caso, pasos "N. acción -> esperado".
-- **Comentario para la HU**: tarjeta `#card-comment` (se muestra al cargar la HU vía `showHu`, se oculta en "Limpiar"); pide un motivo (ej. "la HU pasa a Done") y con `POST /api/comment` genera con el motor elegido un texto de 3-6 líneas para **Copiar** y pegar en los comentarios del work item. Solo genera texto: NO publica en Azure.
+- **Comentario para la HU**: tarjeta `#card-comment` (se muestra al cargar la HU vía `showHu`, se oculta en "Limpiar"); select **estado destino** (done/bloqueo/dependencia) + campo opcional de **causa/dependencia** (aparece según el estado) + **observaciones** en textarea (≤1000); los tres se combinan en el prompt (`build_comment_prompt`). Al generar borra el resultado anterior y muestra `⏳ Generando con {motor}… Ns` (segundos transcurridos) en `#comment-loading`. Con `POST /api/comment` genera un texto de 3-6 líneas para **Copiar** y pegar en los comentarios del work item. El comentario va en **texto plano sin JSON forzado** y con **tope de 600 tokens** (`generate_comment` → `max_tokens=600, json_format=False`; sin esto Ollama puede divagar minutos con `format=json` contradiciendo el prompt). Solo genera texto: NO publica en Azure.
 - Etiquetas de campo (`fieldLabel`), cabecera de pasos, y vista de HU estructurada (`showHu`).
 
 ## Puntos críticos del código (no romper)
