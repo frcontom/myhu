@@ -57,6 +57,7 @@ function escapeHtml(value) {
 
 function showHu(workItem) {
   $("card-hu").classList.remove("hidden");
+  $("card-comment").classList.remove("hidden");
   const stateBadge = workItem.state
     ? `<span class="hu-state">${escapeHtml(workItem.state)}</span>`
     : "";
@@ -1083,6 +1084,9 @@ function reset() {
   $("card-results").classList.add("hidden");
   $("create-result").textContent = "";
   $("create-preview").classList.add("hidden");
+  $("card-comment").classList.add("hidden");
+  $("comment-note").value = "";
+  $("comment-text").value = "";
   $("summary").textContent = "";
   try { localStorage.removeItem("qa-state"); } catch { /* ignore */ }
 }
@@ -1116,6 +1120,53 @@ $("gpt-quantity").addEventListener("input", () => {
 $("btn-import-gpt").addEventListener("click", importFromGpt);
 $("btn-create").addEventListener("click", createCases);
 $("btn-reset").addEventListener("click", reset);
+
+async function generateComment() {
+  if (!state.workItem) {
+    alert("Carga primero la HU (\"Solo ver la HU\" o genera casos).");
+    return;
+  }
+  const note = $("comment-note").value.trim();
+  if (!note) { alert("Escribe el motivo del comentario (ej.: la HU pasa a Done)."); return; }
+  const btn = $("btn-comment-gen");
+  btn.disabled = true;
+  btn.textContent = "Generando…";
+  try {
+    const res = await api("/api/comment", {
+      method: "POST",
+      body: JSON.stringify({
+        work_item_id: state.workItem.id,
+        note,
+        provider: $("llm-provider").value,
+        model: $("kiro-model") ? $("kiro-model").value : "",
+      }),
+    });
+    $("comment-text").value = res.comment || "";
+    $("comment-text").focus();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generar comentario";
+  }
+}
+
+function copyComment() {
+  const txt = $("comment-text").value;
+  if (!txt) return;
+  if (!navigator.clipboard || !navigator.clipboard.writeText) return;
+  navigator.clipboard.writeText(txt).then(() => {
+    const b = $("btn-comment-copy");
+    b.textContent = "¡Copiado!";
+    setTimeout(() => { b.textContent = "Copiar"; }, 1500);
+  }).catch(() => {});
+}
+
+$("btn-comment-gen").addEventListener("click", generateComment);
+$("btn-comment-copy").addEventListener("click", copyComment);
+$("comment-note").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); generateComment(); }
+});
 $("quantity").addEventListener("change", () => { quantityTouched = true; });
 $("llm-provider").addEventListener("change", () => {
   $("kiro-model-field").classList.toggle("hidden", $("llm-provider").value !== "kiro");

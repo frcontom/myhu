@@ -296,6 +296,27 @@ textarea { resize: vertical; }
 .hint a { color: var(--primary); font-weight: 600; text-decoration: none; }
 .hint a:hover { text-decoration: underline; }
 
+.comment-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.comment-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+#comment-text {
+  width: 100%;
+}
+
+.comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 .chip {
   padding: 4px 10px;
   border-radius: 999px;

@@ -14,6 +14,7 @@ from .llm_client import (
     LLMError,
     TestCaseGenerationError,
     _classify_ollama_exception,
+    generate_comment,
     generate_test_cases,
     steps_to_tcm_html,
     stream_test_cases,
@@ -28,6 +29,13 @@ class GenerateRequest(BaseModel):
     instructions: str = Field(
         "", description="Instrucciones extra para el agente (tipos, prioridad, enfoque)"
     )
+    provider: str = Field("", description="ollama | gemini | kiro (vacío = el de .env)")
+    model: str = Field("", description="Modelo Kiro (vacío = KIRO_MODEL o auto)")
+
+
+class CommentRequest(BaseModel):
+    work_item_id: int = Field(..., description="ID de la Historia de Usuario")
+    note: str = Field(..., min_length=1, max_length=600, description="Motivo (ej.: la HU pasa a Done)")
     provider: str = Field("", description="ollama | gemini | kiro (vacío = el de .env)")
     model: str = Field("", description="Modelo Kiro (vacío = KIRO_MODEL o auto)")
 
@@ -105,6 +113,27 @@ def get_hu(work_item_id: int) -> dict:
         return azure_client.get_work_item(work_item_id)
     except AzureDevOpsError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/comment")
+def create_comment(req: CommentRequest) -> dict:
+    note = req.note.strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="Escribe el motivo del comentario")
+    if settings.demo_mode:
+        work_item = sample_work_item(req.work_item_id)
+    else:
+        if not settings.is_configured:
+            raise HTTPException(status_code=400, detail="Configura AZURE_DEVOPS_* en el archivo .env")
+        try:
+            work_item = azure_client.get_work_item(req.work_item_id)
+        except AzureDevOpsError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        comment = generate_comment(work_item, note, req.provider, req.model)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"comment": comment}
 
 
 def _sse(event: str, data: dict) -> str:

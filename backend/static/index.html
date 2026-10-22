@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QA Test Case Generator</title>
-  <link rel="stylesheet" href="style.css?v=39" />
+  <link rel="stylesheet" href="style.css?v=40" />
 </head>
 <body>
   <header class="topbar">
@@ -100,6 +100,21 @@
       <div id="create-preview" class="preview hidden"></div>
       <p id="create-result" class="hint"></p>
     </section>
+
+    <section class="card hidden" id="card-comment">
+      <h2>Comentario para la HU</h2>
+      <p class="hint">Genera un texto breve para pegarlo en los comentarios de la HU en Azure DevOps.</p>
+      <div class="comment-row">
+        <input type="text" id="comment-note" maxlength="600"
+          placeholder="Ej.: la HU pasa a Done — se validó la funcionalidad completa" />
+        <button id="btn-comment-gen" class="btn btn-primary">Generar comentario</button>
+      </div>
+      <textarea id="comment-text" rows="6"
+        placeholder="El comentario listo para copiar aparecerá aquí..."></textarea>
+      <div class="comment-actions">
+        <button id="btn-comment-copy" class="btn btn-ghost">Copiar</button>
+      </div>
+    </section>
   </main>
 
   <div id="loader" class="hidden">
@@ -129,6 +144,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>

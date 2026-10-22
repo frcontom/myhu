@@ -174,6 +174,57 @@ Son de máxima prioridad dentro del CONTENIDO de los casos (títulos, pasos, pri
 """.strip()
 
 
+def build_comment_prompt(work_item: Dict[str, Any], note: str) -> str:
+    criteria = work_item.get("criteria_list") or []
+    criteria_line = (
+        f"{len(criteria)} criterios de aceptación"
+        if criteria
+        else "sin criterios detallados"
+    )
+    return f"""
+Eres un QA senior. Redacta UN comentario breve y profesional para publicar en la Historia de Usuario de Azure DevOps.
+
+## Historia de Usuario
+ID: {work_item.get('id')}
+Título: {work_item.get('title')}
+Estado actual: {work_item.get('state') or 'N/D'}
+Descripción: {(work_item.get('description') or '(sin descripción)')[:900]}
+Criterios: {criteria_line}
+
+## Motivo indicado por el QA
+{note}
+
+Requisitos:
+- Entre 3 y 6 líneas, tono profesional y natural (que no suene a plantilla).
+- Explica el motivo indicado y su implicación para la HU y el trabajo de QA.
+- NO saludos, NO firma, NO markdown, NO comillas envolviendo el texto.
+- NO uses JSON ni llaves {{}}: responde con TEXTO PLANO.
+- Responde SOLO con el texto del comentario.
+""".strip()
+
+
+def _clean_comment(text: str) -> str:
+    text = (text or "").strip()
+    text = re.sub(r"^```(?:text|markdown|json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1].strip()
+    if text.startswith("{") and text.endswith("}"):
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError:
+            obj = None
+        if isinstance(obj, dict):
+            lowered = {str(k).strip().lower(): v for k, v in obj.items()}
+            for key in ("comentario", "comment", "texto", "text", "respuesta"):
+                val = lowered.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            strings = [v for v in obj.values() if isinstance(v, str) and v.strip()]
+            if strings:
+                return max(strings, key=len).strip()
+    return text
+
+
 def _resolve_provider(provider: Optional[str]) -> str:
     resolved = (provider or "").strip().lower() or settings.default_provider
     if resolved not in ("ollama", "gemini", "kiro"):
@@ -195,6 +246,33 @@ def _resolve_provider(provider: Optional[str]) -> str:
             "(app.kiro.dev -> API Keys) y reinicia con: docker compose up -d --build"
         )
     return resolved
+
+
+def generate_comment(
+    work_item: Dict[str, Any],
+    note: str,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> str:
+    resolved = _resolve_provider(provider)
+    streamer = {
+        "gemini": _stream_once_gemini,
+        "kiro": _stream_once_kiro,
+    }.get(resolved, _stream_once)
+    prompt = build_comment_prompt(work_item, note)
+    text: Optional[str] = None
+    error: Optional[str] = None
+    for event in streamer(prompt, 400, model_override=model):
+        if event["type"] == "result":
+            text = event.get("text")
+            error = event.get("error")
+            break
+    if error:
+        raise LLMError(error)
+    cleaned = _clean_comment(text)
+    if not cleaned:
+        raise LLMError("El modelo no devolvió texto para el comentario.")
+    return cleaned
 
 
 def generate_test_cases(

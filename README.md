@@ -112,6 +112,8 @@ Si algo falla, mira la tabla de abajo.
 4. **Revisa/edita** cada caso: título, precondiciones, descripción, criterios que cubre, pasos (reordénalos con **drag & drop** ⠿).
 5. **Crear en Azure DevOps** → crea los `Test Case` enlazados a la HU (pestaña **"Tested by"**, con precondiciones y pasos editables). El panel de **cobertura** (✔/✖) muestra qué criterios quedan sin cubrir y el botón **"Completar cobertura"** genera los faltantes.
 
+6. **Comentario para la HU** (opcional): en la tarjeta "Comentario para la HU" escribe el motivo (ej.: "la HU pasa a Done"), **Generar comentario** y **Copiar** → pégalo en los comentarios del work item en Azure DevOps.
+
 **B. Directo con ChatGPT (sin Ollama):**
 1. Escribe el **ID de la HU**.
 2. **"Pasar a ChatGPT (sin Ollama)"** → se abre un modal: elige la **cantidad** de casos y edita el prompt si quieres.
@@ -278,6 +280,7 @@ Invoke-RestMethod http://localhost:8000/api/test-azure
 | GET | `/api/generate-stream` | Genera casos con streaming SSE (progreso en vivo) |
 | POST | `/api/generate` | Genera casos (bloqueante) |
 | POST | `/api/create` | Crea los test cases en Azure DevOps enlazados a la HU |
+| POST | `/api/comment` | Genera un comentario breve para pegar en la HU (no publica) |
 
 ## Notas
 
