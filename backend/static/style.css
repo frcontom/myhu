@@ -737,4 +737,54 @@ textarea { resize: vertical; }
   font-family: "Consolas", monospace;
 }
 
+.agent-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, 80vw);
+  margin-top: 4px;
+}
+
+.agent-bar {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.agent-bar-label {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-bar-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.agent-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.25s ease;
+  border-radius: 999px;
+}
+
+.agent-bar[data-status="ok"] .agent-bar-fill { background: var(--success); }
+.agent-bar[data-status="err"] .agent-bar-fill { background: var(--danger); }
+
+.agent-bar-state {
+  color: var(--muted);
+  font-family: "Consolas", monospace;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }

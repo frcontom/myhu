@@ -29,12 +29,13 @@ class Settings(BaseSettings):
     azure_devops_pat: str = ""
     azure_devops_url: str = ""
     azure_devops_test_plan_id: str = ""
+    azure_devops_test_plan_name: str = "QA Test Case Generator"
 
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_temperature: float = 0.2
     ollama_max_tokens: int = 8192
-    ollama_num_ctx: int = 4096
+    ollama_num_ctx: int = 8192
 
     llm_provider: str = "ollama"
     enabled_providers: str = "ollama,gemini,kiro"
@@ -51,6 +52,22 @@ class Settings(BaseSettings):
     kiro_model: str = ""
     kiro_engine: str = ""
     kiro_timeout: int = 600
+
+    # Multiagente
+    agents_enabled: bool = True
+    agents_parallel: int = 3
+    agent_include_risk: str = "auto"  # auto | always | never
+    kiro_agents_parallel: int = 1  # agentes Kiro simultáneos (control de créditos)
+
+    # Supervisión por agente
+    agent_op_timeout: int = 180  # s por agente (0 = usa el timeout del motor)
+    agent_inactivity_timeout: int = 45  # s sin tokens nuevos -> cancelar ese agente
+    agent_max_retries: int = 1  # reintentos por agente
+
+    @property
+    def agent_include_risk_mode(self) -> str:
+        mode = (self.agent_include_risk or "auto").strip().lower()
+        return mode if mode in ("auto", "always", "never") else "auto"
 
     @property
     def gemini_configured(self) -> bool:

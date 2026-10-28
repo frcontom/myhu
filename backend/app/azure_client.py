@@ -1,7 +1,7 @@
 import base64
 import re
 from html.parser import HTMLParser
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -237,6 +237,30 @@ class AzureDevOpsClient:
     def _test_headers(self) -> Dict[str, str]:
         return {**self._auth, "Content-Type": "application/json"}
 
+    def who_am_i(self) -> Dict[str, Any]:
+        """Identidad del usuario dueño del PAT. Evita atribuir un 403 al código
+        cuando en realidad el token pertenece a otra persona sin permisos."""
+        try:
+            resp = httpx.get(
+                f"{settings.api_base}/_apis/ConnectionData",
+                params={"api-version": "7.1-preview"},
+                headers=self._auth,
+                timeout=15.0,
+            )
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"HTTP {resp.status_code}"}
+            user = (resp.json().get("authenticatedUser") or {})
+            props = user.get("properties") or {}
+            account = ((props.get("Account") or {}).get("$value")) if isinstance(props, dict) else None
+            return {
+                "ok": True,
+                "display_name": user.get("providerDisplayName") or user.get("customDisplayName"),
+                "account": account,
+                "id": user.get("id"),
+            }
+        except httpx.HTTPError as exc:
+            return {"ok": False, "error": str(exc)}
+
     def get_or_create_test_plan(self, plan_name: str) -> Dict[str, Any]:
         resp = httpx.get(
             self._url("/test/plans"),
@@ -251,6 +275,19 @@ class AzureDevOpsClient:
             for p in plans:
                 if str(p.get("id")) == settings.azure_devops_test_plan_id:
                     return p
+            # ID configurado pero no vino en la lista: intentar GET directo.
+            direct = httpx.get(
+                self._url(f"/test/plans/{settings.azure_devops_test_plan_id}"),
+                params={"api-version": "5.0"},
+                headers=self._auth,
+                timeout=30.0,
+            )
+            if direct.status_code == 200:
+                return direct.json()
+            raise AzureDevOpsError(
+                f"AZURE_DEVOPS_TEST_PLAN_ID={settings.azure_devops_test_plan_id} no existe "
+                f"o no es accesible (HTTP {direct.status_code})."
+            )
         for p in plans:
             if p.get("name") == plan_name:
                 return p
@@ -274,8 +311,8 @@ class AzureDevOpsClient:
 
     def get_root_suite(self, plan_id: int) -> Dict[str, Any]:
         resp = httpx.get(
-            self._url(f"/test/plans/{plan_id}/suites"),
-            params={"api-version": "5.0"},
+            self._url(f"/testplan/Plans/{plan_id}/suites"),
+            params={"api-version": "7.1-preview"},
             headers=self._auth,
             timeout=30.0,
         )
@@ -291,17 +328,118 @@ class AzureDevOpsClient:
             return suites[0]
         raise AzureDevOpsError("El Test Plan no tiene suites raíz.")
 
-    def add_test_case_to_suite(self, plan_id: int, suite_id: int, test_case_id: int) -> None:
+    def get_or_create_suite_for_hu(
+        self, plan_id: int, root_suite_id: int, hu_id: int, hu_title: str = ""
+    ) -> Dict[str, Any]:
+        suite_name = f"HU #{hu_id}"
+        if hu_title:
+            clean = re.sub(r"\s+", " ", hu_title).strip()[:200]
+            suite_name = f"HU #{hu_id} — {clean}"
+
+        # API nueva "Test Plan" (7.1): la vieja (/test, 5.0) devuelve 403 en
+        # escritura en muchas orgs aunque el PAT tenga full access.
+        resp = httpx.get(
+            self._url(f"/testplan/Plans/{plan_id}/suites"),
+            params={"api-version": "7.1-preview"},
+            headers=self._auth,
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise AzureDevOpsError(
+                f"Test Suites GET -> HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        for s in resp.json().get("value", []):
+            name = s.get("name") or ""
+            if name == suite_name or name == f"HU #{hu_id}" or name.startswith(f"HU #{hu_id} "):
+                return s
+
+        body = {
+            "name": suite_name,
+            "suiteType": "staticTestSuite",
+            "parentSuite": {"id": root_suite_id},
+        }
         resp = httpx.post(
-            self._url(f"/test/plans/{plan_id}/suites/{suite_id}/testcases/{test_case_id}"),
-            params={"api-version": "5.0"},
+            self._url(f"/testplan/Plans/{plan_id}/suites"),
+            params={"api-version": "7.1-preview"},
             headers=self._test_headers(),
+            json=body,
             timeout=30.0,
         )
         if resp.status_code not in (200, 201):
             raise AzureDevOpsError(
-                f"Add Test Case a suite -> HTTP {resp.status_code}: {resp.text[:300]}"
+                f"Crear suite de HU {hu_id} -> HTTP {resp.status_code}: {resp.text[:300]}"
             )
+        return resp.json()
+
+    def _suite_test_case_ids(self, plan_id: int, suite_id: int) -> set:
+        """IDs de casos ya presentes en la suite (para idempotencia)."""
+        try:
+            resp = httpx.get(
+                self._url(f"/testplan/Plans/{plan_id}/Suites/{suite_id}/TestCase"),
+                params={"api-version": "7.1-preview"},
+                headers=self._auth,
+                timeout=30.0,
+            )
+            if resp.status_code != 200:
+                return set()
+            ids = set()
+            for item in resp.json().get("value", []):
+                tc = item.get("testCase") or item.get("workItem") or {}
+                tc_id = tc.get("id")
+                if tc_id is not None:
+                    ids.add(int(tc_id))
+            return ids
+        except (httpx.HTTPError, ValueError, TypeError):
+            return set()
+
+    def add_test_cases_to_suite(
+        self, plan_id: int, suite_id: int, test_case_ids: List[int]
+    ) -> Dict[str, Any]:
+        """Agrega varios casos a la suite en una sola llamada (API testplan 7.1).
+        Idempotente: omite los que ya están. Devuelve un reporte por caso."""
+        existing = self._suite_test_case_ids(plan_id, suite_id)
+        to_add = [int(i) for i in test_case_ids if int(i) not in existing]
+        skipped = [int(i) for i in test_case_ids if int(i) in existing]
+        added: List[int] = []
+        error: Optional[str] = None
+
+        if to_add:
+            body = [{"workItem": {"id": i}} for i in to_add]
+            resp = httpx.post(
+                self._url(f"/testplan/Plans/{plan_id}/Suites/{suite_id}/TestCase"),
+                params={"api-version": "7.1-preview"},
+                headers=self._test_headers(),
+                json=body,
+                timeout=60.0,
+            )
+            if resp.status_code in (200, 201):
+                added = to_add
+            else:
+                # Fallback a la API vieja /test caso por caso (reporte parcial).
+                error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                for tc_id in to_add:
+                    one = httpx.post(
+                        self._url(f"/test/plans/{plan_id}/suites/{suite_id}/testcases/{tc_id}"),
+                        params={"api-version": "5.0"},
+                        headers=self._test_headers(),
+                        timeout=30.0,
+                    )
+                    if one.status_code in (200, 201):
+                        added.append(tc_id)
+                if added:
+                    error = None
+
+        return {
+            "added": added,
+            "skipped": skipped,
+            "failed": [i for i in to_add if i not in added],
+            "error": error,
+        }
+
+    def add_test_case_to_suite(self, plan_id: int, suite_id: int, test_case_id: int) -> None:
+        result = self.add_test_cases_to_suite(plan_id, suite_id, [test_case_id])
+        if result["error"] and not result["added"] and not result["skipped"]:
+            raise AzureDevOpsError(f"Add Test Case a suite -> {result['error']}")
 
     def test_connection(self) -> Dict[str, Any]:
         report = {

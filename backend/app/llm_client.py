@@ -47,6 +47,7 @@ def build_prompt(
     work_item: Dict[str, Any],
     quantity: int,
     instructions: str,
+    role: str = "",
 ) -> str:
     criteria = work_item.get("criteria_list") or []
     if not criteria:
@@ -111,6 +112,12 @@ def build_prompt(
   ]
 }"""
 
+    role_block = (
+        f"\n## ENFOQUE OBLIGATORIO DE ESTE AGENTE\n{role.strip()}"
+        if role and role.strip()
+        else ""
+    )
+
     return f"""
 Eres un QA senior con enfoque ISTQB / QA Lead, especializado en diseño de casos de prueba profesionales y profundos (nada genérico).
 
@@ -171,6 +178,7 @@ Tipo: {work_item.get('type')}
 ## INSTRUCCIONES DEL QA — OBLIGATORIAS (última palabra)
 Son de máxima prioridad dentro del CONTENIDO de los casos (títulos, pasos, prioridades, tipos, precondiciones, enfoque) y deben cumplirse en TODOS los casos generados:
 {instructions or "(ninguna)"}
+{role_block}
 """.strip()
 
 
@@ -347,6 +355,13 @@ def stream_test_cases(
         yield {"type": "error", "data": {"detail": str(exc)}}
         return
 
+    if settings.agents_enabled:
+        from .agents import stream_test_cases_multi
+        yield from stream_test_cases_multi(
+            work_item, quantity, instructions, resolved, model
+        )
+        return
+
     max_tokens = (
         settings.gemini_max_tokens
         if resolved in ("gemini", "kiro")
@@ -417,10 +432,13 @@ def stream_test_cases(
 
         missing = quantity - len(cases)
         current_prompt = (
-            prompt
-            + f"\n\nIMPORTANTE: hasta ahora solo generaste {len(cases)} casos. "
-            f"Genera EXACTAMENTE {missing} casos adicionales (numerados TC-{len(cases) + 1:03d} en adelante). "
-            "Devuelve únicamente el JSON con esos casos adicionales."
+            f"Eres un QA senior. Para la Historia de Usuario ID {work_item.get('id')} "
+            f"({work_item.get('title')}), ya se generaron {len(cases)} casos. "
+            f"Genera EXACTAMENTE {missing} casos ADICIONALES y distintos a los anteriores. "
+            "Responde ÚNICAMENTE con JSON válido: "
+            '{"test_cases": [{"title": "...", "description": "...", "priority": 1, '
+            '"type": "funcional", "preconditions": "...", "criterios": [], '
+            '"steps": [{"action": "...", "expected": "..."}]}]}'
         )
         estimated = min(max(missing, 1) * AVG_TOKENS_PER_CASE, max_tokens)
         yield {
@@ -504,6 +522,7 @@ def _stream_once(
     model_override: Optional[str] = None,
     max_tokens: Optional[int] = None,
     json_format: bool = True,
+    inactivity_timeout: int = 0,
 ) -> Iterator[Dict[str, Any]]:
     payload = {
         "model": settings.ollama_model,
@@ -523,6 +542,7 @@ def _stream_once(
     token_count = 0
     start = time.time()
     last_yield = 0.0
+    last_token_at = time.time()
 
     try:
         with httpx.stream(
@@ -546,6 +566,13 @@ def _stream_once(
 
             for line in resp.iter_lines():
                 if not line:
+                    if inactivity_timeout and time.time() - last_token_at > inactivity_timeout:
+                        yield {
+                            "type": "result",
+                            "text": buf or None,
+                            "error": None if buf.strip() else f"inactividad {inactivity_timeout}s sin tokens",
+                        }
+                        return
                     continue
                 try:
                     chunk = json.loads(line)
@@ -555,11 +582,20 @@ def _stream_once(
                 token = chunk.get("response", "")
                 buf += token
                 token_count += 1
+                if token:
+                    last_token_at = time.time()
 
                 if chunk.get("done"):
                     break
 
                 now = time.time()
+                if inactivity_timeout and now - last_token_at > inactivity_timeout:
+                    yield {
+                        "type": "result",
+                        "text": buf or None,
+                        "error": None if buf.strip() else f"inactividad {inactivity_timeout}s sin tokens",
+                    }
+                    return
                 if now - last_yield >= 0.25:
                     last_yield = now
                     elapsed = now - start
@@ -645,6 +681,7 @@ def _stream_once_gemini(
     estimated: int,
     model_override: Optional[str] = None,
     max_tokens: Optional[int] = None,
+    inactivity_timeout: int = 0,
 ) -> Iterator[Dict[str, Any]]:
     headers = {
         "x-goog-api-key": settings.gemini_api_key,
@@ -694,6 +731,7 @@ def _stream_once_gemini(
         token_count = 0
         start = time.time()
         last_yield = 0.0
+        last_token_at = time.time()
 
         try:
             with httpx.stream(
@@ -743,6 +781,7 @@ def _stream_once_gemini(
                         if token:
                             buf += token
                             token_count = max(token_count, len(buf) // 4)
+                            last_token_at = time.time()
 
                         usage = chunk.get("usageMetadata") or {}
                         if usage.get("candidatesTokenCount"):
@@ -755,6 +794,13 @@ def _stream_once_gemini(
                             break
 
                         now = time.time()
+                        if inactivity_timeout and now - last_token_at > inactivity_timeout:
+                            if buf.strip():
+                                yield {"type": "result", "text": buf, "error": None}
+                            else:
+                                last_error = f"inactividad {inactivity_timeout}s sin tokens"
+                                yield {"type": "result", "text": None, "error": last_error}
+                            return
                         if now - last_yield >= 0.25:
                             last_yield = now
                             elapsed = now - start
@@ -854,6 +900,7 @@ def _stream_once_kiro(
     estimated: int,
     model_override: Optional[str] = None,
     max_tokens: Optional[int] = None,
+    inactivity_timeout: int = 0,
 ) -> Iterator[Dict[str, Any]]:
     binary = _kiro_binary()
     if not binary:
@@ -889,11 +936,14 @@ def _stream_once_kiro(
     tmpdir = tempfile.mkdtemp(prefix="kiro-run-")
     proc: Optional[subprocess.Popen] = None
     watchdog: Optional[threading.Timer] = None
+    idle_watchdog: Optional[threading.Timer] = None
     timed_out = {"flag": False}
+    idled_out = {"flag": False}
     buf = ""
     token_count = 0
     start = time.time()
     last_yield = 0.0
+    idle_lock = threading.Lock()
 
     def _kill_on_timeout() -> None:
         timed_out["flag"] = True
@@ -902,6 +952,25 @@ def _stream_once_kiro(
                 proc.kill()
             except OSError:
                 pass
+
+    def _kill_on_idle() -> None:
+        idled_out["flag"] = True
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+
+    def _arm_idle() -> None:
+        nonlocal idle_watchdog
+        if not inactivity_timeout:
+            return
+        with idle_lock:
+            if idle_watchdog is not None:
+                idle_watchdog.cancel()
+            idle_watchdog = threading.Timer(inactivity_timeout, _kill_on_idle)
+            idle_watchdog.daemon = True
+            idle_watchdog.start()
 
     try:
         proc = subprocess.Popen(
@@ -919,6 +988,7 @@ def _stream_once_kiro(
         watchdog = threading.Timer(settings.kiro_timeout, _kill_on_timeout)
         watchdog.daemon = True
         watchdog.start()
+        _arm_idle()
 
         assert proc.stdin is not None and proc.stdout is not None
         proc.stdin.write(prompt)
@@ -931,6 +1001,7 @@ def _stream_once_kiro(
             if delta:
                 buf += delta
                 token_count = max(token_count, len(buf) // 4)
+                _arm_idle()
                 now = time.time()
                 if now - last_yield >= 0.25:
                     last_yield = now
@@ -951,6 +1022,16 @@ def _stream_once_kiro(
         proc.wait()
 
         if proc.returncode != 0:
+            if idled_out["flag"]:
+                if buf.strip():
+                    yield {"type": "result", "text": buf, "error": None}
+                else:
+                    yield {
+                        "type": "result",
+                        "text": None,
+                        "error": f"inactividad {inactivity_timeout}s sin tokens",
+                    }
+                return
             noise = "".join(ln for ln in raw_lines if not ln.strip().startswith("{"))
             yield {
                 "type": "result",
@@ -985,6 +1066,8 @@ def _stream_once_kiro(
     finally:
         if watchdog is not None:
             watchdog.cancel()
+        if idle_watchdog is not None:
+            idle_watchdog.cancel()
         if proc is not None and proc.poll() is None:
             try:
                 proc.kill()
