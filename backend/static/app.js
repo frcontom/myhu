@@ -47,6 +47,49 @@ function setChip(kind, text) {
   chip.textContent = text;
 }
 
+const AGENT_LABELS = {
+  positivos: "Positivos",
+  negativos: "Negativos y límites",
+  riesgo: "Riesgo y seguridad",
+  consolidador: "Consolidador",
+};
+
+function resetAgentBars() {
+  const box = $("agent-bars");
+  if (!box) return;
+  box.innerHTML = "";
+  box.classList.add("hidden");
+}
+
+function ensureAgentBar(agent, label) {
+  const box = $("agent-bars");
+  if (!box) return null;
+  box.classList.remove("hidden");
+  let row = box.querySelector(`[data-agent="${agent}"]`);
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "agent-bar";
+    row.dataset.agent = agent;
+    row.innerHTML =
+      `<span class="agent-bar-label">${escapeHtml(label || AGENT_LABELS[agent] || agent)}</span>` +
+      `<div class="agent-bar-track"><div class="agent-bar-fill" style="width:0%"></div></div>` +
+      `<span class="agent-bar-state">…</span>`;
+    box.appendChild(row);
+  }
+  return row;
+}
+
+function updateAgentBar(agent, { percent, state, status } = {}) {
+  const row = ensureAgentBar(agent);
+  if (!row) return;
+  if (typeof percent === "number") {
+    row.querySelector(".agent-bar-fill").style.width =
+      Math.min(100, Math.max(0, percent)) + "%";
+  }
+  if (state) row.querySelector(".agent-bar-state").textContent = state;
+  if (status) row.dataset.status = status;
+}
+
 function escapeHtml(value) {
   return String(value == null ? "" : value)
     .replace(/&/g, "&amp;")
@@ -432,6 +475,7 @@ function streamOne(id, quantity, instructions) {
       `&provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`;
     const es = new EventSource(url);
     activeStream = es;
+    resetAgentBars();
 
     let warmSec = 0;
     const ticker = setInterval(() => {
@@ -442,13 +486,50 @@ function streamOne(id, quantity, instructions) {
       );
     }, 1000);
 
-    es.addEventListener("start", () => {
+    es.addEventListener("start", (e) => {
       setProgress(2, `Cargando modelo para HU #${id}… primera vez puede tardar hasta 1 min`);
+      try {
+        const d = JSON.parse(e.data);
+        if (d.multiagent && Array.isArray(d.agents)) {
+          d.agents.forEach((a) => ensureAgentBar(a.name, a.label));
+        }
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener("agent_start", (e) => {
+      clearInterval(ticker);
+      const d = JSON.parse(e.data);
+      updateAgentBar(d.agent, { state: "generando…", status: "run" });
+    });
+
+    es.addEventListener("agent_done", (e) => {
+      const d = JSON.parse(e.data);
+      updateAgentBar(d.agent, {
+        percent: 100,
+        state: `✔ ${d.count} caso${d.count === 1 ? "" : "s"}`,
+        status: "ok",
+      });
+    });
+
+    es.addEventListener("agent_error", (e) => {
+      const d = JSON.parse(e.data);
+      const label = d.status === "timeout" ? "⏱ timeout" : "✖ falló";
+      updateAgentBar(d.agent, {
+        state: `${label}${d.reason ? " · " + d.reason : ""}`,
+        status: "err",
+      });
     });
 
     es.addEventListener("progress", (e) => {
       clearInterval(ticker);
       const d = JSON.parse(e.data);
+      if (d.agent) {
+        updateAgentBar(d.agent, {
+          percent: d.percent,
+          state: `${d.tokens || 0} tok · ${d.tokens_per_sec || 0}/s`,
+        });
+        return;
+      }
       setProgress(
         d.percent,
         d.note || `HU #${id} · Tokens: ${d.tokens} / ~${d.estimated} · ${d.tokens_per_sec}/s · ${d.elapsed}s`
@@ -698,9 +779,23 @@ async function executeCreate() {
       (allUpdated.length ? ` · Actualizados ${allUpdated.length}: ${updatedIds}` : "");
   if (state.lastPublish) {
     const p = state.lastPublish;
-    msg += p.error
-      ? ` | Test Plans: no se publicó (${p.error})${p.error.includes("404") ? " → revisa que tu PAT tenga el scope 'Test Management → Read & Write'" : ""}`
-      : ` | Test Plans: plan "${p.plan_name}" suite "${p.suite_name}"`;
+    if (p.error && !(p.added && p.added.length) && !(p.skipped && p.skipped.length)) {
+      msg += ` | Test Plans: no se publicó (${p.error})${
+        p.error.includes("404") || p.error.includes("403")
+          ? " → revisa permiso/licencia de Test Plans de tu cuenta"
+          : ""
+      }`;
+    } else {
+      const exec = p.executable != null ? p.executable : (p.added || []).length;
+      const parts = [`plan "${p.plan_name}" → suite "${p.suite_name}"`];
+      parts.push(`${exec} ejecutable(s)`);
+      if (p.skipped && p.skipped.length) parts.push(`${p.skipped.length} ya estaban`);
+      if (p.failed && p.failed.length) parts.push(`${p.failed.length} fallaron`);
+      const link = p.url
+        ? ` · <a href="${p.url}" target="_blank" rel="noopener">Abrir en Test Plans ▶</a>`
+        : "";
+      msg += ` | Test Plans: ${parts.join(", ")}${link}`;
+    }
   }
   $("create-result").innerHTML = msg;
   setChip("chip-ok", demo ? "demo" : "conectado");

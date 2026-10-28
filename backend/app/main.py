@@ -74,6 +74,9 @@ def _probe_ollama() -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
+    pat_identity = None
+    if settings.is_configured:
+        pat_identity = azure_client.who_am_i()
     return {
         "status": "ok",
         "model": settings.ollama_model,
@@ -83,6 +86,8 @@ def health() -> dict:
         "ollama": _probe_ollama(),
         "llm_provider": settings.default_provider,
         "providers": settings.enabled_providers_list,
+        "agents_enabled": settings.agents_enabled,
+        "pat_identity": pat_identity,
         "gemini": {
             "configured": settings.gemini_configured,
             "model": settings.gemini_model,
@@ -275,11 +280,13 @@ def create(req: CreateRequest) -> dict:
     updated = []
     iteration_path = ""
     area_path = ""
+    hu_title = ""
     if not settings.demo_mode:
         try:
             hu = azure_client.get_work_item(req.work_item_id)
             iteration_path = hu.get("iteration_path") or ""
             area_path = hu.get("area_path") or ""
+            hu_title = hu.get("title") or ""
         except AzureDevOpsError:
             pass
 
@@ -314,18 +321,32 @@ def create(req: CreateRequest) -> dict:
             return {"created": created, "updated": updated, "error": str(exc)}
 
     publish = None
-    if created and settings.azure_devops_test_plan_id:
+    if created:
         try:
-            plan = azure_client.get_or_create_test_plan("QA Test Case Generator")
-            suite = azure_client.get_root_suite(plan["id"])
-            for c in created:
-                azure_client.add_test_case_to_suite(plan["id"], suite["id"], c["id"])
+            plan = azure_client.get_or_create_test_plan(settings.azure_devops_test_plan_name)
+            root = azure_client.get_root_suite(plan["id"])
+            suite = azure_client.get_or_create_suite_for_hu(
+                plan["id"], root["id"], req.work_item_id, hu_title
+            )
+            report = azure_client.add_test_cases_to_suite(
+                plan["id"], suite["id"], [c["id"] for c in created]
+            )
             publish = {
                 "plan_id": plan.get("id"),
                 "plan_name": plan.get("name"),
                 "suite_id": suite.get("id"),
                 "suite_name": suite.get("name"),
+                "added": report["added"],
+                "skipped": report["skipped"],
+                "failed": report["failed"],
+                "executable": len(report["added"]) + len(report["skipped"]),
+                "url": (
+                    f"{settings.api_base}/{settings.azure_devops_project}"
+                    f"/_testPlans/execute?planId={plan.get('id')}&suiteId={suite.get('id')}"
+                ),
             }
+            if report["error"]:
+                publish["error"] = report["error"]
         except AzureDevOpsError as exc:
             publish = {"error": str(exc)}
 
