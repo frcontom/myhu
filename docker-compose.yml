@@ -4,6 +4,8 @@ services:
     container_name: qa-testcase-backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - AZURE_DEVOPS_ORG=${AZURE_DEVOPS_ORG}
       - AZURE_DEVOPS_PROJECT=${AZURE_DEVOPS_PROJECT}

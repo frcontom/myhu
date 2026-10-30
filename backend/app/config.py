@@ -2,22 +2,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PLACEHOLDERS = {"", "tu-organizacion", "Tu-Proyecto", "tu_pat_aqui", "your-organization", "your-project", "your_pat_here"}
 
-# Catálogo visible en el front (selector "Modelo Kiro"). Los ids se verificaron
-# contra kiro-cli 2.32 (`--model <id>`); credits = multiplicador de créditos Kiro.
-# Solo los modelos eficientes (<= 1.3x); los de 2x-4.4x (Opus, GPT Terra/Sol) se omiten.
+# Catálogo visible en el front (selector "Modelo Kiro"). Los ids y créditos se
+# verificaron contra kiro-cli (`chat --list-models --format json`).
+# Se incluyen TODOS los modelos estables; se OMITEN los experimentales
+# (description "Experimental preview ...": Opus 5.5, Haiku 5.5, GPT 5.6 Sol,
+# Kimi K3, DeepSeek 3.2, MiniMax M2.1, Qwen3 Coder Next).
 KIRO_MODELS = [
-    {"id": "", "label": "Auto (recomendado)", "credits": "1x", "use": "Selección automática de modelo"},
-    {"id": "qwen3-coder-next", "label": "Qwen3 Coder Next", "credits": "0.05x", "use": "Pruebas sencillas y generación repetitiva de código"},
-    {"id": "minimax-m2.1", "label": "MiniMax M2.1", "credits": "0.15x", "use": "Experimentos económicos"},
-    {"id": "deepseek-3.2", "label": "DeepSeek V3.2", "credits": "0.25x", "use": "Análisis y pruebas de varios pasos"},
-    {"id": "minimax-m2.5", "label": "MiniMax M2.5", "credits": "0.25x", "use": "Generación de código y pruebas"},
-    {"id": "claude-haiku-4.5", "label": "Claude Haiku 4.5", "credits": "0.4x", "use": "Correcciones rápidas y pruebas unitarias simples"},
-    {"id": "glm-5", "label": "GLM 5", "credits": "0.5x", "use": "Análisis de cambios en varios archivos"},
-    {"id": "gpt-5.6-luna", "label": "GPT 5.6 Luna", "credits": "0.6x", "use": "Pruebas y programación con bajo consumo"},
-    {"id": "claude-sonnet-5.5", "label": "Claude Sonnet 5.5", "credits": "1.3x", "use": "Pruebas integradas y depuración"},
-    {"id": "claude-sonnet-5", "label": "Claude Sonnet 5", "credits": "1.3x", "use": "Implementación y revisión de pruebas"},
-    {"id": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6", "credits": "1.3x", "use": "Desarrollo y correcciones"},
-    {"id": "claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "credits": "1.3x", "use": "Alternativa para tareas de programación"},
+    {"id": "", "label": "Auto (recomendado)", "credits": "1x", "use": "Elige el modelo por ti", "tier": "auto"},
+    {"id": "minimax-m2.5", "label": "MiniMax M2.5", "credits": "0.25x", "use": "Casos rápidos y sencillos", "tier": "regular"},
+    {"id": "claude-haiku-4.5", "label": "Claude Haiku 4.5", "credits": "0.4x", "use": "Pruebas simples, lo más veloz", "tier": "regular"},
+    {"id": "glm-5", "label": "GLM 5", "credits": "0.5x", "use": "Casos de varios pasos", "tier": "regular"},
+    {"id": "gpt-5.6-luna", "label": "GPT 5.6 Luna", "credits": "0.6x", "use": "Uso diario con bajo gasto", "tier": "regular"},
+    {"id": "claude-sonnet-5.5", "label": "Claude Sonnet 5.5", "credits": "1.3x", "use": "HU normales, buena calidad", "tier": "bueno"},
+    {"id": "claude-sonnet-5", "label": "Claude Sonnet 5", "credits": "1.3x", "use": "HU normales, buena calidad", "tier": "bueno"},
+    {"id": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6", "credits": "1.3x", "use": "HU normales, buena calidad", "tier": "bueno"},
+    {"id": "claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "credits": "1.3x", "use": "HU normales, buena calidad", "tier": "bueno"},
+    {"id": "gpt-5.6-terra", "label": "GPT 5.6 Terra", "credits": "2.2x", "use": "HU complejas, gasta más", "tier": "excelente"},
+    {"id": "claude-opus-5", "label": "Claude Opus 5", "credits": "2.2x", "use": "HU difíciles, máxima calidad", "tier": "excelente"},
+    {"id": "claude-opus-4.8", "label": "Claude Opus 4.8", "credits": "2.2x", "use": "HU difíciles, máxima calidad", "tier": "excelente"},
+    {"id": "claude-opus-4.7", "label": "Claude Opus 4.7", "credits": "2.2x", "use": "HU difíciles, máxima calidad", "tier": "excelente"},
+    {"id": "claude-opus-4.6", "label": "Claude Opus 4.6", "credits": "2.2x", "use": "HU difíciles, máxima calidad", "tier": "excelente"},
+    {"id": "claude-opus-4.5", "label": "Claude Opus 4.5", "credits": "2.2x", "use": "HU difíciles, máxima calidad", "tier": "excelente"},
 ]
 
 
@@ -39,6 +44,10 @@ class Settings(BaseSettings):
 
     llm_provider: str = "ollama"
     enabled_providers: str = "ollama,gemini,kiro"
+    # Mostrar u ocultar cada motor en el selector (true/false por motor en el .env).
+    provider_ollama_enabled: bool = True
+    provider_gemini_enabled: bool = True
+    provider_kiro_enabled: bool = True
     gemini_api_key: str = ""
     gemini_url: str = "https://generativelanguage.googleapis.com"
     gemini_model: str = "gemini-3.7-flash"
@@ -57,7 +66,8 @@ class Settings(BaseSettings):
     agents_enabled: bool = True
     agents_parallel: int = 3
     agent_include_risk: str = "auto"  # auto | always | never
-    kiro_agents_parallel: int = 1  # agentes Kiro simultáneos (control de créditos)
+    kiro_agents_parallel: int = 3  # agentes Kiro simultáneos (créditos: 3x a la vez)
+    agents_single_threshold: int = 2  # <= N casos -> 1 sola llamada directa (sin agentes)
 
     # Supervisión por agente
     agent_op_timeout: int = 180  # s por agente (0 = usa el timeout del motor)
@@ -80,8 +90,12 @@ class Settings(BaseSettings):
     @property
     def enabled_providers_list(self) -> list:
         valid = ("ollama", "gemini", "kiro")
-        raw = {p.strip() for p in (self.enabled_providers or "").split(",") if p.strip()}
-        ordered = [p for p in valid if p in raw]
+        flags = {
+            "ollama": self.provider_ollama_enabled,
+            "gemini": self.provider_gemini_enabled,
+            "kiro": self.provider_kiro_enabled,
+        }
+        ordered = [p for p in valid if flags[p]]
         return ordered or list(valid)
 
     @property

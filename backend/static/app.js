@@ -1328,12 +1328,30 @@ document.querySelectorAll(".preset-btn").forEach((b) => {
     if (h.kiro && Array.isArray(h.kiro.models)) {
       const sel = $("kiro-model");
       sel.innerHTML = "";
-      for (const m of h.kiro.models) {
+      const tiers = [
+        { key: "regular", label: "Regulares (económicos)" },
+        { key: "bueno", label: "Buenos (equilibrio)" },
+        { key: "excelente", label: "Excelentes (máxima capacidad)" },
+      ];
+      const addOption = (parent, m) => {
         const opt = document.createElement("option");
         opt.value = m.id;
-        opt.textContent = `${m.label} (${m.credits})`;
+        opt.textContent = m.use
+          ? `${m.label} (${m.credits}) — ${m.use}`
+          : `${m.label} (${m.credits})`;
         if (m.use) opt.title = m.use;
-        sel.appendChild(opt);
+        parent.appendChild(opt);
+      };
+      for (const m of h.kiro.models) {
+        if ((m.tier || "") === "auto" || !m.tier) addOption(sel, m);
+      }
+      for (const t of tiers) {
+        const group = h.kiro.models.filter((m) => m.tier === t.key);
+        if (!group.length) continue;
+        const og = document.createElement("optgroup");
+        og.label = t.label;
+        for (const m of group) addOption(og, m);
+        sel.appendChild(og);
       }
       sel.value = "";
     }

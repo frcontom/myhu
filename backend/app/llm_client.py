@@ -355,7 +355,7 @@ def stream_test_cases(
         yield {"type": "error", "data": {"detail": str(exc)}}
         return
 
-    if settings.agents_enabled:
+    if settings.agents_enabled and quantity > settings.agents_single_threshold:
         from .agents import stream_test_cases_multi
         yield from stream_test_cases_multi(
             work_item, quantity, instructions, resolved, model
@@ -371,6 +371,7 @@ def stream_test_cases(
         "gemini": _stream_once_gemini,
         "kiro": _stream_once_kiro,
     }.get(resolved, _stream_once)
+    inactivity = max(0, settings.agent_inactivity_timeout)
 
     prompt = build_prompt(work_item, quantity, instructions)
     estimated = min(quantity * AVG_TOKENS_PER_CASE, max_tokens)
@@ -383,7 +384,7 @@ def stream_test_cases(
     for attempt in range(1, 3):
         last_text = None
         error = None
-        for event in streamer(current_prompt, estimated, model_override=model):
+        for event in streamer(current_prompt, estimated, model_override=model, inactivity_timeout=inactivity):
             if event["type"] == "result":
                 last_text = event["text"]
                 error = event["error"]
